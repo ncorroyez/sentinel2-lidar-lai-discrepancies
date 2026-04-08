@@ -1,0 +1,517 @@
+---
+title: "spatialisation_scriptlidar"
+author: "marianne Laslier"
+date: "22/08/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+librairies
+```{r cars}
+
+
+#### Download libraries
+
+# To call help just print ? name_of_function
+
+library(raster)
+library(rgdal)
+library(sp)
+library("lidR")
+library("rgdal")
+library(tidyverse)    #pour tester les noms et etablir les correspondances entre fichiers
+
+# gestion memoire des fichiers temporaires ou de travail
+
+# write("TMP = 'E:/DATA/Temp_calculs'", file=file.path(Sys.getenv('R_USER'), '.Renviron'))
+getwd()
+#setwd("E:/DATA/Temp_calculs")   # si besoin de place possible de changer le repertorie de travail
+memory.limit(4000000000)
+
+rm(list=ls())     # remove objects from the environment
+gc()       #
+
+```
+
+paramètres
+```{r cars}
+
+dsn="D:\\LAS_Hauteur\\BLOIS"
+setwd(dsn)
+
+## paramètres
+#mnh=raster("mnh_emprise_res10m2.tif")
+#shape_bancs=readOGR(dsn="C:/Users/marianne.laslier/Desktop/traitements_avril",layer="bancs_photointerprétation_arc_2013_mnt_rel_lastools")
+#shape_bancs=readOGR(dsn,layer="bancs_2013_corrige_2012")
+
+
+### dossier de base
+
+liste_dir=dir(dsn,pattern=".lasx") #☺pour n'avoir qu'une copie par tuile"
+
+### dossier du/des MNTs
+#### MNT complet sur BLOIS
+MNT=raster("C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//MORMAL//MNT_0.5m//mnt_mormal.tif")"
+
+### dossier de résultats
+outDir="C:\\Users\\UPJV\\Desktop\\RECHERCHE\\lidar_IMPRINT\\BLOIS\\metriques_lidar"
+
+
+```
+```
+II\ Fonction de Sylvie pour extraire les métriques
+```{r}
+#### fonction de sylvie pour extraire toutes les métriques
+metriques_mormal_1 <- function(las_i_h, seuils_veg, seuil_gap)      # las_i_h fihier las de la placette, seuils veg vecteur de 3 valeurs bas, int, haut (eg. 1,2,7), seuil_gap seuil pour les gaps
+{
+  # rumple index sur chm avec fct bouche trou et assez lisse
+  chm_i <- grid_canopy(las_i_h, res = 1, pitfree(thresholds = c(0, 2, 5, 10, 15), max_edge = c(0, 1), subcircle = 0.5))
+  ##### si affichage chm ombre
+  # crs(chm_i)<- CRS('+init=EPSG:2154')
+  # chm_prod <- terrain(chm_i, opt = c("slope", "aspect"))
+  # chm_hillshade <- hillShade(slope = chm_prod$slope, aspect = chm_prod$aspect)
+  # plot(chm_hillshade, col = grey.colors(50, 0, 1), legend = FALSE)
+  # 
+  
+  
+  rumple_i <- rumple_index(chm_i)
+  
+  # hauteurs des pts et metriques derivees des H
+  Z_i <- las_i_h@data$Z 
+  Z_i_veg <- filter_poi(las_i_h, Classification == 4L)@data$Z     # liste des Z des pts vegetation
+  Z_i_veg_seuil_bas <- filter_poi(las_i_h, Classification == 4L & Z > seuils_veg[2])@data$Z       # liste des Z des pts vegetation au dessus du seuil vegetation basse
+  
+  # si aucun pts vegetation dans la placette
+  if (length(Z_i_veg) == 0) {   
+    Hmax_i <- max(Z_i)
+    VCI_i <-NA
+    pad_i <-NULL
+    pad_i$z <-0
+    pad_i$lad <- NA # à modifier 
+    CV_PAD_i <- NA
+    PAI_i <- NA
+    max_PAD_i <- NA
+    H_max_PAD_i <- NA
+    
+    max_PAD_i_haute <- NA
+    H_max_PAD_i_haute <- NA
+    max_PAD_i_inter <- NA
+    H_max_PAD_i_inter <- NA
+    max_PAD_i_basse <- NA
+    H_max_PAD_i_basse <- NA
+    
+    
+  } else {
+    
+    Hmax_i <- max(Z_i)        # H max de la placette
+    VCI_i <- VCI( Z_i_veg_seuil_bas, by = 1, zmax= Hmax_i )    # vertical complexity index  de la placette
+    
+    # PAD/LAD  et metriques issues du PAD/LAD
+    pas = 1
+    #pad_i <-LAD(Z_i, dz=pas, k=0.5, z0=seuils_veg[1]-pas)    # pb de calul pour certianes placettes; bug lidR 
+    
+    # solution pour contourner le pb
+    
+    Z_0 <- seuils_veg[1]- ceiling(seuils_veg[1]/pas)*pas
+    id_dep <- ((seuils_veg[1]- Z_0) / pas) +1
+    
+    pad_i <-LAD(Z_i, dz=pas, k=0.5, z0=Z_0)
+    pad_i <- pad_i[id_dep:dim(pad_i)[1],]
+    
+    if (dim(pad_i)[1] == 0) {
+      
+      pad_i <- NULL
+      nb_indice_z <- ceiling(Hmax_i - (seuils_veg[1] + 0.5*pas )) 
+      
+      pad_i <- data.frame(matrix(NA,ncol= 2, nrow=nb_indice_z)) 
+      colnames(pad_i) = c("z", "lad")
+      pad_i$z <- seq(from = (seuils_veg[1]+0.5*pas) ,to = (seuils_veg[1]+ (nb_indice_z - 0.5)*pas), by =pas) 
+      pad_i$lad <- rep(NA, nb_indice_z)
+      
+      CV_PAD_i <- NA
+      PAI_i <- NA
+      max_PAD_i <- NA
+      H_max_PAD_i <- NA
+      
+      max_PAD_i_haute <- NA
+      H_max_PAD_i_haute <- NA
+      max_PAD_i_inter <- NA
+      H_max_PAD_i_inter <- NA
+      max_PAD_i_basse <- NA
+      H_max_PAD_i_basse <- NA
+    } else {
+      
+      CV_PAD_i <- 100 * sd(pad_i$lad, na.rm = TRUE) / mean(pad_i$lad, na.rm = TRUE)    # coef variation du LAD
+      PAI_i <- sum(pad_i$lad, na.rm = TRUE)     # plant area index
+      
+      max_PAD_i <- max(pad_i$lad, na.rm = TRUE)          # LAD max
+      H_max_PAD_i <- pad_i$z[which(pad_i$lad==max_PAD_i)]  # Hauteur ou se situe le LAD max
+      
+      max_PAD_i_haute <- NA
+      H_max_PAD_i_haute <- NA
+      max_PAD_i_inter <- NA
+      H_max_PAD_i_inter <- NA
+      max_PAD_i_basse <- NA
+      H_max_PAD_i_basse <- NA
+      
+      max_layer <- max(pad_i$z)
+      
+      if (max_layer > seuils_veg[3])
+      {
+        
+        indice_z_haut <- ceiling((seuils_veg[3] +0.5*pas - seuils_veg[1]))    
+        indice_z_int <- ceiling((seuils_veg[2] +0.5*pas - seuils_veg[1]))
+        
+        max_PAD_i_haute <- max(pad_i$lad[indice_z_haut:dim(pad_i)[1]], na.rm = TRUE) 
+        H_max_PAD_i_haute <- pad_i$z[indice_z_haut:dim(pad_i)[1]][which(pad_i$lad[indice_z_haut:dim(pad_i)[1]]== max_PAD_i_haute)]
+        
+        max_PAD_i_inter <- max(pad_i$lad[indice_z_int:(indice_z_haut-1)], na.rm = TRUE) 
+        H_max_PAD_i_inter <- pad_i$z[indice_z_int:(indice_z_haut-1)][which(pad_i$lad[indice_z_int:(indice_z_haut-1)]== max_PAD_i_inter)]
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+        
+      } else if (max_layer >seuils_veg[2] & max_layer <= seuils_veg[3]) {
+        
+        indice_z_int <- ceiling((seuils_veg[2] +0.5*pas - seuils_veg[1]))  
+        max_PAD_i_inter <- max(pad_i$lad[indice_z_int:dim(pad_i)[1]], na.rm = TRUE) 
+        H_max_PAD_i_inter <- pad_i$z[indice_z_int:dim(pad_i)[1]][which(pad_i$lad[indice_z_int:dim(pad_i)[1]]== max_PAD_i_inter)]
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+      } else {
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+      }
+    }
+  }
+  # gap fraction raster ave seuil de hauteur pour definir les trouees
+  chm_tr_i <- grid_canopy(las_i_h, res=0.5, p2r() )    # raster moins lisse que pour rumple, restitue mieux les trouees 
+  gapf_raster_i <- 100 * (length(chm_tr_i@data@values[!is.na(chm_tr_i@data@values) & chm_tr_i@data@values < seuil_gap ]))/ ( length( chm_tr_i@data@values[!is.na(chm_tr_i@data@values)] ) )
+  
+  # gap fraction issu du ratio des premiers retours parvenant sous le seuil des hauteurs par rapport au nbre total de premier retours
+  
+  gapf_pts_i <- 100 * dim(filter_poi(las_i_h, ReturnNumber ==1L & Z <seuil_gap)@data)[1] /  dim(filter_first(las_i_h)@data)[1]
+  
+  
+  metrics = list(rumple_i,
+                 Hmax_i, VCI_i,
+                 CV_PAD_i, PAI_i, max_PAD_i, H_max_PAD_i, 
+                 max_PAD_i_haute, H_max_PAD_i_haute, max_PAD_i_inter, H_max_PAD_i_inter, max_PAD_i_basse, H_max_PAD_i_basse,
+                 gapf_raster_i, gapf_pts_i,
+                 pad_i
+  )
+  names(metrics)=c("Rumple_index",
+                   "Hmax", "VCI",
+                   "CV_PAD", "PAI", "Max_PAD", "H_maxPAD",
+                   "Max_PAD_haut", "H_maxPAD_haut", "Max_PAD_inter", "H_maxPAD_inter", "Max_PAD_bas", "H_maxPAD_bas",
+                   "Gap_fraction_raster", "Gap_fraction_pts",
+                   "Profil_pad" )
+  
+  return(metrics)
+  
+}
+```
+
+``` 
+tentatives de grid des métriques ressortant dans les modèles d'Eva
+```{r}
+
+
+# gap fraction issu du ratio des premiers retours parvenant sous le seuil des hauteurs par rapport au nbre total de premier retours
+
+
+# densite_retour_1=grid_density(filter_first(listlas),res=5)
+# densite_retour_1_seuil_gap=grid_density(filter_poi(listalas, ReturnNumber ==1L & Z <seuil_gap),res=5)
+# gapf_pts=100*densite_retour_1_seuil_gap[[1]]/densite_retour_1
+#   
+# gapf_pts_i <- 100 * dim(filter_poi(las_i_h, ReturnNumber ==1L & Z <seuil_gap)@data)[1] /  dim(filter_first(las_i_h)@data)[1]
+
+##### parametres de bases (cf fonction de sylvie)
+  seuils_veg <- c(1,2,7)    # seuil pour vegetation d'interet
+  seuil_gap <- 1     # seuil pour calul des trouees
+  list_metriques <-list()
+  names_liste<- NULL
+  liste_metriques=list()
+  
+#### boucle sur les tuiles de Blois
+  lenght(liste_dir)
+  
+  for ( i in 1:length(liste_dir) )
+  {
+    i
+    name=unlist(strsplit(liste_dir[i],"\\."))[1]
+    nom_tuile=listlas@data$filename[i]
+    las=readLAS(nom_tuile)
+    las_filtres_i=filter_poi(las,Classification >1, Z<50)## filtrer les points au dessus de 50m
+    
+## gap fraction 
+myMetrics = function(z, seuil_gap)
+{
+  nfirst <- length(z)
+  above_seuil <- sum(z> seuil_gap)
+  x <- above_seuil/nfirst*100
+  return(list("Gap_fraction_pts"=x))
+}
+
+
+gap_frac=grid_metrics(las_filtres_i,~myMetrics(Z,seuil_gap),res=10,filter=~ReturnNumber==1)
+
+## log(Hmax)
+hmax=grid_metrics(las_filtres_i,~log(max(Z)),res=10)
+
+
+### calcul du VCI
+#fonction du calcul
+func_vci=function(x,thick)
+{
+z_max=max(x)
+log_z_max=log(z_max)
+vci_ind=VCI(x,z_max,thick)
+  #return(list(vci_ind))
+return(list("log_Hmax "=log_z_max,"VCI"=vci_ind))
+}
+
+# filtrage pour le VCI
+Z_i_veg_seuil_bas <- filter_poi(las_filtres_i, Classification == 4L & Z > seuils_veg[2]) 
+# aplliquer la fonction
+VCI=grid_metrics(Z_i_veg_seuil_bas,~func_vci(Z,1),res=10)
+#plot(VCI)
+
+
+#### PAI
+func_pai=function(X,pas,seuils_veg)
+{
+#pad_i <-LAD(X, dz=pas, k=0.5, z0=seuils_veg[1]-pas)    # pb de calul pour certianes placettes; bug lidR 
+#PAI_i <- sum(pad_i$lad, na.rm = TRUE)
+ Z_0 <- seuils_veg[1]- ceiling(seuils_veg[1]/pas)*pas
+ id_dep <- ((seuils_veg[1]- Z_0) / pas) +1
+ 
+ pad_i <-LAD(X, dz=pas, k=0.5, z0=Z_0)
+ pad_i <- pad_i[id_dep:dim(pad_i)[1],]
+ 
+if (dim(pad_i)[1] == 0)
+  {
+    pad_i <- NULL
+    nb_indice_z <- ceiling(Hmax_i - (seuils_veg[1] + 0.5*pas )) 
+    
+    pad_i <- data.frame(matrix(NA,ncol= 2, nrow=nb_indice_z)) 
+     colnames(pad_i) = c("z", "lad")
+   pad_i$z <- seq(from = (seuils_veg[1]+0.5*pas) ,to = (seuils_veg[1]+ (nb_indice_z - 0.5)*pas), by =pas) 
+    pad_i$lad <- rep(NA, nb_indice_z)
+    
+     CV_PAD_i <- NA
+     PAI_i <- NA
+    max_PAD_i <- NA
+    H_max_PAD_i <- NA
+     
+     max_PAD_i_haute <- NA
+     H_max_PAD_i_haute <- NA
+    max_PAD_i_inter <- NA
+    H_max_PAD_i_inter <- NA
+     max_PAD_i_basse <- NA
+     H_max_PAD_i_basse <- NA
+ } 
+else 
+  {
+     
+     CV_PAD_i <- 100 * sd(pad_i$lad, na.rm = TRUE) / mean(pad_i$lad, na.rm = TRUE)    # coef variation du LAD
+     PAI_i <- sum(pad_i$lad, na.rm = TRUE)     # plant area index
+}
+
+return(list("PAI"=PAI_i))
+
+}
+
+pai_grid=grid_metrics(las_filtres_i,~func_pai(Z,1,seuils_veg),res=10)
+
+#plot(pai_grid)
+
+#stack_metriques_lidar_blois=stack(pai_grid,VCI,RAT=FALSE,quick=TRUE)
+#plot(stack_metriques_lidar)
+#liste_metriques[[i]]=stack_metriques_lidar_blois
+writeRaster(pai_grid,paste("pai_",name,".tif",sep=""),format="GTiff",overwrite=TRUE)
+writeRaster(VCI,paste("VCI",name,".tif",sep=""),format="GTiff",overwrite=TRUE)
+writeRaster(hmax,paste("log_hmax",name,".tif",sep=""),format="GTiff",overwrite=TRUE)
+
+}
+```  
+
+Prédiction du modèle d'Eva sur toutes les tuiles. attention, les tuiles ont été fusionnées sur ArcGIS avant. 
+```{r}
+library(raster)
+library("lidR")
+library("rgdal")
+library("sp")
+library(tidyverse)
+library(viridis)
+library(ggplot2)
+
+shape_plots <- readOGR(dsn = "C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//placettes", layer = 'placettes_blois')
+proj4string(shape_plots)  # verifie le systeme de projection
+  
+
+
+metriques_lidar_blois=stack("metriiques_lidar_blois_hmax_pai_vci.tif")
+names(metriques_lidar_blois)=c("log_Hmax_5_m","PAI_5_m","VCI_5_m")
+plot(metriques_lidar_blois)
+
+
+### virer les na du VCI
+na=is.na(metriques_lidar_blois$VCI_5_m)
+metriques_lidar_blois$VCI_5_m[na==1]=0
+plot(metriques_lidar_blois$VCI_5_m)
+metriques_lidar_blois$VCI_5_m
+summary(metriques_lidar_blois$VCI_5_m)
+#rasterFromXYZ(xyz, res=c(NA,NA), crs="", digits=5)
+
+writeRaster(metriques_lidar_blois,"metriques_lidar_final_blois_hmax_pai_vci.tif")
+
+### ajouter les données d'Eva pour construire le modèle
+
+load("slopes_lidar_new.RData")
+
+### construire le modèle
+mod <- lm(log_slope ~ log_Hmax_5_m + PAI_5_m + VCI_5_m,
+                  data = slopes_lidar)
+
+
+### prédiction 
+## direct raster
+classif=raster::predict(metriques_lidar_blois, mod, "carte_du_microclimat_new_slopes.tif",fun=predict,format="GTiff",datatype='FLT4S',na.rm=TRUE,inf.rm=TRUE,overwrite=TRUE)
+
+plot(classif)
+
+## en passant d'abord en vecteur
+# passer en vecteur
+vect_log_Hmax=values(metriques_lidar_blois$log_Hmax_5_m)
+vect_PAI=values(metriques_lidar_blois$PAI_5_m)
+vect_VCI=values(metriques_lidar_blois$VCI_5_m)
+
+
+vec_metriques=cbind(vect_log_Hmax,vect_PAI,vect_VCI)
+colnames(vec_metriques)=c("log_Hmax_5_m","PAI_5_m","VCI_5_m")
+
+# puis en dataframe
+vec_metriques=as.data.frame(vec_metriques)
+
+# fonction predict. Here it is possible to calculate de standard error 
+vec_classif=predict(mod, vec_metriques, se.fit = TRUE, scale = NULL, df = Inf,
+        interval = c("none", "confidence", "prediction"),
+        level = 0.95, type = c("response", "terms"),
+        terms = NULL,
+        pred.var = res.var/weights, weights = 1)
+# repasser en raster et enregistrer l'image finale
+classif3=raster(ncol=metriques_lidar_blois@ncols,nrow=metriques_lidar_blois@nrows)
+values(classif3)=vec_classif$fit
+classif3@extent=metriques_lidar_blois@extent
+projection(classif3)=CRS("+init=epsg:2154")
+writeRaster(classif3,"slope_blois_nouv_modele.tif")
+
+# idem pour la carte des erreurs
+error=raster(ncol=metriques_lidar_blois@ncols,nrow=metriques_lidar_blois@nrows)
+values(error)=vec_classif$se.fit
+error@extent=metriques_lidar_blois@extent
+ projection(error)=CRS("+init=epsg:2154")
+writeRaster(error,"error_slope2_new2.tif")
+
+########## calcul des températures
+# passage du lof(slope) à slope
+slope=exp(classif3)
+
+## calcul des températures en fonction des valeurs d'Eva
+temp_max_absolue=(slope*31.8)+(17.47*(1-slope))
+plot(temp_max_absolue)
+writeRaster(temp_max_absolue,"temperature_microclim_max_absolue.tif",overwrite=TRUE)
+
+temp_min_absolue=(slope*14.3)+(17.47*(1-slope))
+plot(temp_max_absolue)
+writeRaster(temp_min_absolue,"temperature_microclim_min_absolue.tif",overwrite=TRUE)
+
+
+temp_moy_max=(slope*23.87)+(17.47*(1-slope))
+plot(temp_moy_max)
+writeRaster(temp_moy_max,"temperature_microclim_moy_max.tif",overwrite=TRUE)
+
+temp_moy_min=(slope*4.1)+(17.47*(1-slope))
+plot(temp_moy_min)
+writeRaster(temp_moy_min,"temperature_microclim_moy_min.tif",overwrite=TRUE)
+
+
+##### cartes de températures pour tout le jeu de données
+## charger les données
+load("temperatures_day_WS.RData") 
+temp_moy_max=raster()## rasters vides
+temp_moy_min=raster() 
+
+## boucle sur toutes les données
+for (i in 1: length(temperatures_day_WS$date))
+{
+  #calcul
+  temp_moy_max_i=(slope*temperatures_day_WS$T_WS_day_max[i])+(17.47*(1-slope))
+  temp_moy_min_i=(slope*temperatures_day_WS$T_WS_day_min[i])+(17.47*(1-slope))
+  # stack avec les précédents rasters
+  temp_moy_max=stack(temp_moy_max,temp_moy_max_i)
+  temp_moy_min=stack(temp_moy_min,temp_moy_min_i)
+}
+
+## calcul de la moyenne
+temp_min_moyennees=mean(temp_moy_min)
+temp_max_moyennees=mean(temp_moy_max)
+
+## sorties
+writeRaster(temp_min_moyennees,"temp_min_moyennees.tif",overwrite=TRUE)
+writeRaster(temp_max_moyennees,"temp_max_moyennees.tif",overwrite=TRUE)
+
+
+###### extraire les valeurs du modèle et des erreurs sur les placettes
+predictions_modele=stack(slope,classif3,error)
+tab_predictions_modle=raster::extract(predictions_modele,shape_plots,df=TRUE)
+tab_predictions_modele2=cbind(shape_plots@data$id_plot,tab_predictions_modle)
+colnames(tab_predictions_modele2)=c("id_plots","id","slope","log_slope","sd_error")
+save(tab_predictions_modele2,file="tab_predictions_modele_new.RData")
+
+###### cartographie
+ggplot(classif)
+
+gplot(classif3) +  
+  geom_raster(aes(fill=factor(value),alpha=0.8)) + 
+  #geom_polygon(data=OR, aes(x=long, y=lat, group=group), fill=NA,color="grey50", size=1)+
+  coord_equal()
+
+##+ scale_fill_viridis_c(option = "magma")
+
+plot()
+# error_slope=exp(error)
+# error_jour=(error_slope*31.6)+(16*(1-error_slope))
+# plot(error_jour)
+# error_nuit=(error_slope*9.1)+(16*(1-error_slope))
+# plot(error_nuit)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+
+
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

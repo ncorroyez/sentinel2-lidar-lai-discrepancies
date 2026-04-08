@@ -1,0 +1,359 @@
+---
+title: "Summary of Main Findings for 1st Paper on LiDAR/S2 Inter-comparison for Forest Leaf Area Index Estimation"
+format: pdf
+editor: visual
+---
+
+## *Initial comparison*
+
+### *Density scatterplot*
+
+![](images/initial_lai_scatterplots.png)
+
+### *Aigoual*
+
+![](images/Aigoual_lai_boxplot_comparison-01.png)
+
+### *![](images/Aigoual_lai_comparison-01.png)*
+
+### *Blois*
+
+![](images/Blois_lai_boxplot_comparison-02.png)
+
+### *![](images/Blois_lai_comparison-01.png)*
+
+### *Mormal*
+
+![](images/Mormal_lai_boxplot_comparison-01.png)
+
+## *![](images/Mormal_lai_comparison-02.png)*
+
+## *Sampling strategies*
+
+-   Keep all points and perform OOB predictions
+
+-   Take 60 field data per site -\> 180 points
+
+-   Compute variogram
+
+-   Random sampling of all points
+
+### Field data
+
+![](images/aigoual_field.png)
+
+![](images/blois_field.png)
+
+![](images/mormal_field.png)
+
+### Variogram
+
+#### Aigoual
+
+##### 1km
+
+![](images/Aigoual_variogram1km_plot-03.png)
+
+##### 2km
+
+![](images/Aigoual_variogram2km_plot-03.png)
+
+##### 5km
+
+![](images/Aigoual_variogram5km_plot-03.png)
+
+##### All points
+
+![](images/Aigoual_variogram_plot-03.png)
+
+#### Blois
+
+##### 1km
+
+![](images/Blois_variogram1km_plot.png)
+
+##### 2km
+
+![](images/Blois_variogram2km_plot.png)
+
+##### 5km
+
+![](images/Blois_variogram5km_plot.png)
+
+##### All
+
+![](images/Blois_variogram_plot.png)
+
+#### Mormal
+
+##### 1km
+
+![](images/Mormal_variogram1km_plot.png)
+
+##### 2km
+
+![](images/Mormal_variogram2km_plot.png)
+
+##### 5km
+
+![](images/Mormal_variogram5km_plot.png)
+
+##### All
+
+![](images/Mormal_variogram_plot.png)
+
+### Spatial auto-correlation test (Moran)
+
+|             | **All Data** | **Field Data** | **All Data Sampled (500 obs / 20,000 obs)** | **Variogram 500m** |
+|-------------|--------------|----------------|---------------------------------------------|--------------------|
+| **Aigoual** | 0.71         | -0.05          | 0.21 / 0.5                                  | 0.09               |
+| **Blois**   | NA           | 0.26           | 0.4 / 0.7                                   | 0.25               |
+| **Mormal**  | NA           | -0.02          | 0.03 / 0.37                                 | 0.05               |
+
+### Boxplots
+
+-   Aigoual: 198,585 points (60 field points, 102 points via variogram 500m)
+
+-   Blois: 303,188 points (60 field points, 142 points via variogram 500m)
+
+-   Mormal: 963,367 points (60 field points, 438 points via variogram 500m)
+
+-   3 sites: 1,465,140 points (180 field points, 682 points via variogram 500m)
+
+Legend: Red -\> All data - Green -\> Field - Blue -\> All data sampled (500 obs) - Purple -\> Variogram 500m
+
+#### Aigoual
+
+![](images/boxplot_Aigoual-01.png)
+
+#### Blois
+
+![](images/boxplot_Blois-01.png)
+
+#### Mormal
+
+![](images/boxplot_Mormal-01.png)
+
+#### All sites
+
+![](images/boxplot_all-01.png)
+
+## *RF*
+
+**Splitting rule**: *Extratrees* (500 trees) to handle big data (instead of variance), sample_fraction = 0.2
+
+To have an equal comparison we keep extratrees even for smaller datasets. Explicability still works for extratrees, if a larger number of trees is selected.
+
+| Data / Output var        | LiDAR LAI                     | Sentinel-2 LAI                | delta LAI                     |
+|--------------------------|-------------------------------|-------------------------------|-------------------------------|
+| **All data**             | OOB R² = 0.94, OOB MSE = 0.24 | OOB R² = 0.75, OOB MSE = 0.16 | OOB R² = 0.92, OOB MSE = 0.26 |
+| **Field**                | OOB R² = 0.62, OOB MSE = 1.81 | OOB R² = 0.45, OOB MSE = 0.52 | OOB R² = 0.6, OOB MSE = 1.59  |
+| **Sampled 500 obs**      | OOB R² = 0.75, OOB MSE = 1.23 | OOB R² = 0.54, OOB MSE = 0.35 | OOB R² = 0.68, OOB MSE = 1.25 |
+| **Variogram 500m (RF)**  | OOB R² = 0.79, OOB MSE = 1    | OOB R² = 0.44, OOB MSE = 0.45 | OOB R² = 0.7, OOB MSE = 1.15  |
+| **Variogram 500m (DRF)** | NA                            | OOB R² = 0.42, OOB MSE = 0.47 | OOB R² = 0.77, OOB MSE = 0.87 |
+
+### All data
+
+#### LiDAR LAI
+
+OOB R² = 0.94, OOB MSE = 0.24
+
+![](images/lidar_lai_no_dummies_importance-02.png)
+
+![](images/pp_lcv_target_lidar_lai-02.png)
+
+![](images/pp_mean_target_lidar_lai-01.png)
+
+![](images/pp_lskew_target_lidar_lai-01.png)
+
+![](images/bi_partial_lcv_mean_target_lidar_lai-01.png)
+
+#### Sentinel-2 LAI
+
+OOB R² = 0.75, OOB MSE = 0.16
+
+![](images/s2_lai_no_dummies_importance.png)
+
+![](images/pp_lcv_target_s2_lai.png)
+
+![](images/pp_mean_target_s2_lai.png)
+
+![](images/pp_lskew_target_s2_lai.png)
+
+![](images/bi_partial_lcv_mean_target_s2_lai.png)
+
+#### delta LAI
+
+OOB R² = 0.92, OOB MSE = 0.26
+
+![](images/deltaLAI_no_dummies_importance.png)
+
+![](images/pp_lcv_target_deltaLAI.png)
+
+![](images/pp_mean_target_deltaLAI.png)
+
+![](images/pp_lskew_target_deltaLAI.png)
+
+![](images/bi_partial_lcv_mean_target_deltaLAI.png)
+
+### Field
+
+#### LiDAR LAI
+
+OOB R² = 0.62, OOB MSE = 1.81
+
+Validation R² = 0.64 Validation MSE = 1.63
+
+![](images/clipboard-896409305.png)
+
+#### Sentinel-2 LAI
+
+OOB R² = 0.45, OOB MSE = 0.52
+
+Validation R² = 0.33, Validation MSE = 0.52
+
+![](images/clipboard-3041322067.png)
+
+#### delta LAI
+
+OOB R² = 0.6, OOB MSE = 1.59
+
+Validation R² = 0.54, Validation MSE = 1.68
+
+![](images/clipboard-3516681584.png)
+
+### Sampled 500 obs
+
+#### LiDAR LAI
+
+OOB R² = 0.75, OOB MSE = 1.23
+
+Validation R² = 0.78, Validation MSE = 0.99
+
+![](images/clipboard-3547368462.png)
+
+#### Sentinel-2 LAI
+
+OOB R² = 0.54, OOB MSE = 0.35
+
+Validation R² = 0.44, Validation MSE = 0.44
+
+![](images/clipboard-641498279.png)
+
+#### delta LAI
+
+OOB R² = 0.68, OOB MSE = 1.25
+
+Validation R² = 0.69, Validation MSE = 1.13
+
+![](images/clipboard-200901440.png)
+
+### Variogram 500 obs
+
+#### LiDAR LAI
+
+OOB R² = 0.79, OOB MSE = 1
+
+Validation R² = 0.78, Validation MSE = 1
+
+![](images/clipboard-1424322726.png)
+
+#### Sentinel-2 LAI
+
+OOB R² = 0.44, OOB MSE = 0.45
+
+Validation R² = 0.45, Validation MSE = 0.43
+
+![](images/clipboard-460323208.png)
+
+#### delta LAI
+
+OOB R² = 0.7, OOB MSE = 1.15
+
+Validation R² = 0.7, Validation MSE = 1.1
+
+![](images/clipboard-2585826459.png)
+
+## DRF
+
+### All data
+
+Too many data, not working
+
+### Variogram 500m
+
+#### Sentinel-2 LAI
+
+OOB R² = 0.42, OOB MSE = 0.47
+
+![](images/clipboard-1366897444.png)
+
+#### deltaLAI
+
+OOB R² = 0.77, OOB MSE = 0.87
+
+![](images/clipboard-3394813080.png)
+
+#### Causality
+
+-   Train the DRF
+
+-   Predict (OOB) weights
+
+-   Select several PAD Profiles: top-5m, top-10m, top-15m, top-20m, top-25m, top-30m
+
+-   For each profile and output variable, create polynomial regression with degree chosen by Lasso
+
+-   Plot causality
+
+##### Variogram 500m
+
+![](images/clipboard-109699757.png)
+
+```         
+Variable: PAD_35.5 - Best Degree: 2 - Best Lambda: 0.0194369 - Min CV Error: 2.604395 
+Variable: PAD_30.5 - Best Degree: 5 - Best Lambda: 0.008511117 - Min CV Error: 2.150489 
+Variable: PAD_25.5 - Best Degree: 5 - Best Lambda: 0.000769793 - Min CV Error: 1.873169 
+Variable: PAD_20.5 - Best Degree: 3 - Best Lambda: 0.0191512 - Min CV Error: 1.415323 
+Variable: PAD_15.5 - Best Degree: 2 - Best Lambda: 0.0484344 - Min CV Error: 1.571817 
+Variable: PAD_10.5 - Best Degree: 5 - Best Lambda: 0.007859593 - Min CV Error: 1.435191 
+Variable: PAD_5.5 - Best Degree: 5 - Best Lambda: 0.007894621 - Min CV Error: 1.420507 
+```
+
+![](images/clipboard-3793907331.png)
+
+```         
+Variable: PAD_35.5 - Best Degree: 2 - Best Lambda: 0.01106198 - Min CV Error: 0.3222531 
+Variable: PAD_30.5 - Best Degree: 2 - Best Lambda: 0.008566435 - Min CV Error: 0.3196978 
+Variable: PAD_25.5 - Best Degree: 2 - Best Lambda: 0.06010824 - Min CV Error: 0.3446509 
+Variable: PAD_20.5 - Best Degree: 3 - Best Lambda: 0.0001291842 - Min CV Error: 0.3334958 
+Variable: PAD_15.5 - Best Degree: 5 - Best Lambda: 1.967527e-05 - Min CV Error: 0.3075425 
+Variable: PAD_10.5 - Best Degree: 5 - Best Lambda: 1.703299e-05 - Min CV Error: 0.3347402 
+Variable: PAD_5.5 - Best Degree: 5 - Best Lambda: 0.0001658152 - Min CV Error: 0.3478245
+```
+
+## Curves of metrics as a function of depth
+
+### Aigoual
+
+![](images/Aigoual_correlation_lidar_s2_for_profiles_lcv3_quantiles.png)
+
+![](images/Aigoual_correlation_lidar_s2_for_profiles_Full_Composition_mean_3_quantiles.png)
+
+![](images/Aigoual_correlation_lidar_s2_for_profiles_Full_Composition_lskew_3_quantiles.png)
+
+### Blois
+
+![](images/Blois_correlation_lidar_s2_for_profiles_lcv10_quantiles.png)
+
+![](images/Blois_correlation_lidar_s2_for_profiles_Full_Composition_mean_3_quantiles.png)
+
+![](images/Blois_correlation_lidar_s2_for_profiles_lskew10_quantiles.png)
+
+### Mormal
+
+![](images/Mormal_correlation_lidar_s2_for_profiles_Full_Composition_lcv_3_quantiles.png)
+
+![](images/Mormal_correlation_lidar_s2_for_profiles_Full_Composition_mean_3_quantiles.png)
+
+![](images/Mormal_correlation_lidar_s2_for_profiles_Full_Composition_lskew_3_quantiles.png)

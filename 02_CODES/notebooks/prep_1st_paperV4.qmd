@@ -1,0 +1,297 @@
+---
+title: "Proposal for 1st Paper on LiDAR/S2 Inter-comparison for Forest Leaf Area Index Estimation"
+format: pdf
+editor: visual
+---
+
+## Research Questions
+
+Does Sentinel-2 provide consistent LAI estimation compared to LiDAR ones ? What are the structural factors influencing the differences in LAI estimated by LiDAR and by Sentinel-2 ?Are these factors site-specific or generalisable ?)
+
+## (Mini) Intro
+
+-   LAI is defined as one-sided leaf area per unit ground surface area, typically expressed in square meters per square meter (m²/m²). It is very important in forest processes...
+
+-   Field LAI: difficulties/limitations/hypotheses.
+
+-   Employ remote sensing data: spatial/temporal measurements of high resolution (still hypotheses)
+
+-   LiDAR
+
+-   Sentinel-2
+
+-   LAI in this work = PAI. Wood not studied, to simplify we say LAI here.
+
+-   Multi-sensor : LiDAR + Sentinel-2.
+
+-   In this study, we assume that (1) Sentinel-2 can only acquire the top of the canopy, (2) Thanks to its beams penetrating the canopy, LiDAR provides accurate LAI estimations, whereas Sentinel-2 encounters limitations when applied in forests (PROSAIL turbid assumption, only deciduous, LAI saturation):
+
+    -\> Does Sentinel-2 provide consistent LAI estimation compared to LiDAR ones ? What are the structural factors influencing the differences in LAI estimated by LiDAR and by Sentinel-2 ? Are these factors site-specific or generalisable ?
+
+-   This work's objectives are to compare LiDAR and Sentinel-2 LAI estimations in three distinct forest conditions and assess which variables impact $\Delta$LAI the most and how, taking into account the variations in the study sites' characteristics.
+
+-   To accomplish them, we: (1) develop a sensor alignment technique that sets LiDAR and Sentinel-2 in the same acquisition framework (2) use a two-step sampling strategy that mitigates spatial auto-correlation, (3) identify metrics that best explain $\Delta$LAI with machine learning and (4) assess them when matched with the canopy depth.
+
+-   By understanding what structural factors impact $\Delta$LAI, we can accurately estimate it. This opens the way to the correction of Sentinel-2 LAI time series, fostering new applications for forest management...
+
+## Data
+
+Currently, three study sites are explored. They were already studied in the IMPRINT ANR Project and have been taken over by the MaCCMic ANR Project. All are temperate forests located in Metropolitan France. The Aigoual French State Forest (44.12° N, 3.52 °E) is a deciduous mountain forest in the South of France. It is mainly composed of beeches but also contains a part of coniferous trees. The Blois French State Forest (47.57 °N, 1.29 °E) is a deciduous lowland forest located in the center of France. This forest is almost entirely composed of oaks. The Mormal French State Forest (50.20 °N, 3.74 °E) is another deciduous lowland forest in the North of France. It is mainly composed of oaks and beeches.
+
+![](images/clipboard-3877794617.png){width="520"}
+
+### Field data
+
+![](images/clipboard-3014502529.png){width="300"}
+
+![](images/clipboard-1065472117.png){width="300"}
+
+![](images/clipboard-1088362979.png){width="300"}
+
+-\> 60 points for each site
+
+### ALS and Sentinel-2 data
+
+ALS data were acquired during the summer of 2021 with a point density between 25 and 50 points per square meter. Since Sentinel-2 acquires data every five days, many acquisitions are available. To better understand the differences between Sentinel-2 LAI and LiDAR LAI and develop a preliminary model that corrects Sentinel-2 LAI, we selected the closest acquisitions to the LiDAR acquisition that include a minimum amount of clouds that could disturb the acquisitions. The data are in UTM 31N format and at a ten-meter resolution.
+
+![](images/clipboard-532107754.png){width="500"}
+
+## Methods
+
+### Fundamentals
+
+1.  We work site by site to see if explanatory features differ.
+
+2.  LAI calculations:
+
+    -   LiDAR LAI: Beer-Lambert
+
+    -   Sentinel-2: PROSAIL inversion (input parametrisation: ATBD)
+
+    -   $\Delta$LAI: LiDAR LAI - Sentinel-2 LAI
+
+3.  Hypotheses:
+
+    -   Sentinel-2 reflectance is insensitive to an increase in LAI above a certain threshold (LAI \~ 6m²/m²)
+
+    -   Airborne LiDAR acquisition made from the sky with laser beams penetrating the canopy contains far more accurate information about the whole forest structure. **Therefore, it can be considered as a reference measurement of LAI.**
+
+    -   The turbid medium assumption of PROSAIL is limiting when assessing vegetation properties from a heterogeneous canopy and coniferous trees.
+
+### Align Geometry of Acquisition
+
+#### 2 normalization techniques
+
+1.  The first normalization method involves normalizing using the Digital Terrain Model (DTM), with data at the scale of a Sentinel-2 pixel translated according to the top of the canopy as detected by Sentinel-2. This approach aligns the highest trees with the maximum height value of the canopy, preserving horizontal heterogeneity. The second normalization method utilizes the Digital Surface Model, thereby maintaining the shape of the canopy. As this approach results in negative heights, points are shifted by the maximum height value to return to positive values. To accurately incorporate ground points in the Leaf Area Density (LAD) calculations, they are re-positioned just below the first vegetation points. This method preserves vertical heterogeneity while eliminating horizontal heterogeneity.
+
+    ![](images/norm_test021224.png)
+
+#### Cumulated LAD profiles
+
+1.  Instead of summing all profiles, we proposed to accumulate LAD profiles commencing from the top of the canopy. This approach is implemented to replicate Sentinel-2's acquisition view for LiDAR data, which observes only the uppermost canopy layer. We extracted cumulated LAD profiles increasing by one-meter depth increments, and calculated the coefficient of variation of cumulated LAD profiles (CV_LAD) utilizing all layers (= LAI) for both normalization techniques.
+2.  Furthermore, we implemented the canopy depth variable, which corresponds to the vertical extent of a cumulated LAD profile from the canopy top, measured in meters.
+3.  For each observation, we randomly selected one cumulated LAD profile with its associated canopy depth and calculated $\Delta$LAI_dtm and $\Delta$LAI_dsm for a given canopy depth. This methodology enables us to obtain $\Delta$LAIs for various depths, thereby introducing canopy depth as a potential feature for machine learning models.
+
+### Metrics
+
+1.  We compute several explanatory variables described below that will serve as input of a ML model (RF) predicting $\Delta$LAI_dtm and $\Delta$LAI_dsm.
+
+![](images/clipboard-2534229978.png)
+
+### Sampling Selection
+
+1.  Because of PROSAIL's design on working with deciduous forests, we filtered out non-deciduous stands and focused our study on deciduous-only ones. Furthermore, to focus only on trees, we also filtered pixels whose mean height are less than two meters. To do so, we computed a one-meter resolution Canopy Height Model (CHM). We masked pixels with a height inferior to two meters. We projected the CHM to a ten-meter resolution, therefore averaging 10 by 10 pixel mask values, to obtain ten-meter resolution pixels with a percentage of one-meter resolution pixels inside them being superior to two meters height. We kept 90% of them, ensuring the elimination of a large majority of non-tree areas.
+
+2.  It is recognized that forest LAI exhibits spatial autocorrelation, which can impact machine learning models through overfitting. Several sampling strategies have been proposed in the literature to mitigate or potentially negate this effect. Spatial autocorrelation occurs due to similar observations being in close proximity to one another. Consequently, we propose a two-step sampling strategy. First, we stratify our observations. We establish 3 classes of mean and 3 classes of Lskew, using distribution-based pre-defined breaks, resulting in 9 classes. Second, we sample 120 observations for each site, balancing the 9 classes as much as possible. Minimal distance between samples is 300 meters for Aigoual, 400 meters for Blois, and 500 meters for Mormal.
+
+3.  We verify LiDAR LAI spatial auto-correlation: we compute Moran's I (covariance between neighbors -\> \[-1, 1\], close to 0 the better) test with spatial weight matrix built with the 10 closest neighbors.
+
+4.  We verify that our samples' variable distributions match with those from full data. We also check field data distribution.
+
+### Hypotheses Verification
+
+1.  We want to compare the two normalization strategies.
+2.  We build two distinct RF models: one predicting $\Delta$LAI_dtm and one predicting $\Delta$LAI_dsm using the canopy depth, LiDAR metrics, Sentinel-2 LAI and spatial information (lat/lon) as explanatory variables. We extract the variable importance, predict $\Delta$LAI_dtm or $\Delta$LAI_dsm on the 60 field points of the study site, add it to Sentinel-2 LAI and compare to the initial random cumulated LAD profiles.
+3.  We do the same using only the canopy depth and Lcv (heterogeneity metric) to see the differences in performance.
+
+#### Analysis of Explanatory Variables & Depth
+
+##### Random Forest
+
+1.  We compute partial plots of canopy depth and Lcv for each site.
+
+##### Application of Impactful Variables on Cumulated LAD profiles
+
+1.  We are not able to select much more samples for our RF model (maybe on Mormal, prob not on Aigoual/Blois). We want to confirm our findings on canopy depth and Lcv playing a major role in describing $\Delta$LAIs.
+
+2.  On the whole sites (still deciduous-only pixels), to see the impact of canopy depth, we compute cumulated LAD profiles from the top of the canopy of width increasing by 1 meter. We compute the correlation between Sentinel-2 LAI and each cumulated LAD profile for the 3 classes of Lcv. During the computation, we remove pixels with CHM heights smaller than the studied depth (e.g. if the studied depth is 10 meter, remove pixels \< 10 meters, keep pixels =\> 10 meters).
+
+### Prediction
+
+1.  Generalized predicting model
+
+## Results
+
+### Visualization
+
+### Stratification
+
+(Samples according to classes, LiDAR LAI histograms)
+
+![](images/sAigoual.png){width="250"}
+
+![](images/hAigoual.png){width="250"}
+
+![](images/sBlois.png){width="250"}
+
+![](images/hBlois.png){width="250"}
+
+![](images/sMormal.png){width="250"}
+
+![](images/hMormal.png){width="250"}
+
+### Spatial Auto-correlation Check
+
+Moran's I on LiDAR LAI for the three sites (k = 10)
+
+| Aigoual | Blois | Mormal |
+|---------|-------|--------|
+| 0.07    | 0.09  | 0.06   |
+
+### Random Forest
+
+#### DTM Normalization
+
+![](images/dtmImp.png){width="700"}
+
+Aigoual
+
+![](images/dtmImp-02.png){width="700"}
+
+Blois
+
+![](images/dtmImp-03.png){width="700"}
+
+Mormal
+
+![](images/dtmImp-04.png){width="700"}
+
+| R²               | Aigoual | Blois | Mormal |
+|------------------|---------|-------|--------|
+| All variables    | 0.55    | 0.6   | 0.53   |
+| Only Depth + Lcv | 0.63    | 0.7   | 0.6    |
+
+| MSE              | Aigoual | Blois | Mormal |
+|------------------|---------|-------|--------|
+| All variables    | 3.11    | 0.93  | 7.85   |
+| Only Depth + Lcv | 2.57    | 0.69  | 6.61   |
+
+#### DSM Normalization
+
+![](images/dsmImp.png){width="700"}
+
+Aigoual
+
+![](images/dsmImp-01.png){width="700"}
+
+Blois
+
+![](images/dsmImp-02.png){width="700"}
+
+Mormal
+
+![](images/dsmImp-03.png){width="700"}
+
+| R²               | Aigoual | Blois | Mormal |
+|------------------|---------|-------|--------|
+| All variables    | 0.55    | 0.68  | 0.57   |
+| Only Depth + Lcv | 0.62    | 0.67  | 0.71   |
+
+| MSE              | Aigoual | Blois | Mormal |
+|------------------|---------|-------|--------|
+| All variables    | 2.97    | 1.65  | 1.33   |
+| Only Depth + Lcv | 2.48    | 1.7   | 0.9    |
+
+### Analysis of Explanatory Variables & Depth
+
+![](images/dtmScatter.png){width="300"}
+
+![](images/dsmScatter.png){width="300"}
+
+![](images/dsm_pp_depth.png){width="300"}
+
+![](images/dsm_pp_lcv.png){width="300"}
+
+![](images/correlation_Aigoual_Deciduous_Only_depth_analysis_mask_chm_true-02.png){width="300"}
+
+![](images/correlation_Aigoual_Deciduous_Only_depth_analysis_mask_chm_true-03.png){width="300"}
+
+![](images/dtmScatter-01.png){width="300"}
+
+![](images/dsmScatter-01.png){width="300"}
+
+![](images/pp_depth_dsm_target_pad_minus_lai_dsm-01.png){width="300"}
+
+![](images/pp_lcv_target_pad_minus_lai_dsm.png){width="300"}
+
+![](images/correlation_Blois_Deciduous_Only_depth_analysis_mask_chm_true-01.png){width="300"}
+
+![](images/correlation_Blois_Deciduous_Only_depth_analysis_mask_chm_true-02.png){width="300"}
+
+![](images/dtmScatter-02.png){width="300"}
+
+![](images/dsmScatter-02.png){width="300"}
+
+![](images/pp_depth_dsm_target_pad_minus_lai_dsm-02.png){width="300"}
+
+![](images/pp_lcv_target_pad_minus_lai_dsm-01.png){width="300"}
+
+![](images/correlation_Mormal_Deciduous_Only_depth_analysis_mask_chm_true-02.png){width="300"}
+
+![](images/correlation_Mormal_Deciduous_Only_depth_analysis_mask_chm_true-03.png){width="300"}
+
+## Discussion
+
+-   Lcv always the second best variables along with depth, even if it's not its position in the RF variable importance ranking.
+
+-   Similar R² for both normalization methods, MSE lowered slightly for Aigoual, largely for Mormal, increased for Blois, from DTM norm to DSM norm.
+
+-   Other variables may impact $\Delta$LAIs, e.g. mean, vci, lskew, s2_lai (when used, can increase R² to a maximal of \~0.1).
+
+    ![](images/clipboard-140370382.png){width="619"}
+
+-   This is corr matrix for the 3 combined sites. Depth is correlated to nothing. Lcv is with vci, mean, max, slope.
+
+-   Following this, getting more samples would make this study more consistent.
+
+### Heading to a Generalized Model ?
+
+-   Train + test on 3 sites using only depth + Lcv gives good results on DSM normalization. A bit of spatial autocorrelation remain (Moran = 0.15, lat/lon in \~middle of RF variable importance ranking)
+
+    ![](images/scatter.png){width="698"}
+
+-   Too much spatial autocorrelation to do it on DTM normalization (ranked 2nd and 3rd in RF variable importance ranking).
+
+### Further work
+
+-   We could use the predicted $\Delta$LAI as a function of canopy depth and heterogeneity to correct Sentinel-2 LAI time series.
+
+-   At more than one date, ALS data may not be enough to correct Sentinel-2 LAI. Other RS data could be necessary.
+
+-   ALS data availability is limited. GEDI data are available in time and include various product such as height and LAI.
+
+## Conclusion
+
+-   We performed a comparison of two normalization techniques for aligning ALS data with Sentinel-2 data.
+
+-   We stratified our datasets and set sampling distances to mitigate. spatial autocorrelation.
+
+-   We predicted $\Delta$LAI for both normalization methods, using a set of LiDAR features, Sentinel-2 LAI, spatial information, and our implementation of canopy depth. We set that only two variables being canopy depth and Lcv explain at least 60% of the variance of the two $\Delta$LAIs.
+
+-   This percentage could be increased by using more samples, but analyzing the correlation between LiDAR LAI and Sentinel-2 LAI with varying depth and heterogeneity classes of Lcv confirmed our results.
+
+-   We assessed depth's impact when linked with heterogeneity classes on the correlation between LiDAR and Sentinel-2 LAI.
+
+-   Consistency of explanatory variables between sites opens the way for a generalized model, if a way to better reducing spatial autocorrelation is found.
+
+## 

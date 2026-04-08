@@ -1,0 +1,928 @@
+---
+title: "LiDAR and Sentinel-2 LAI Random Forest Evolution Analysis"
+author: "Nathan Corroyez"
+date: "`r Sys.Date()`"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+## Introduction
+
+This notebook performs Random Forest analysis on LiDAR and Sentinel-2 LAI data for different forest sites using various metrics. We explore different cases by including/excluding dummy variables and analyzing two target variables: `LiDAR_LAI` and `deltaLAI`.
+
+## Pre-processing Parameters
+
+```{r setup, echo=TRUE}
+rm(list=ls(all=TRUE)) # Clear the global environment (remove all objects)
+gc() # Trigger the garbage collector to free up memory
+
+# Load required libraries
+library(terra)
+library(ranger)
+library(dplyr)
+library(ggplot2)
+
+# Pre-processing parameters
+sites <- c("Aigoual", "Blois", "Mormal")
+# sites <- c("Blois")
+# sites <- c("Mormal", "Blois")
+results_dir <- "../../03_RESULTS"
+output_dir <- "../../04_FIGURES/RF"
+forest_composition <- "Not_Masked"  # Can be "Full_Composition", "Deciduous_Only", "Not_Masked"
+set.seed(42)  # Ensure reproducibility
+
+```
+
+## Function to load metrics for a given site
+
+```{r, echo=F}
+load_metrics_for_site <- function(site, results_dir, forest_composition) {
+  # Define the metrics directory for the given site
+  metrics_dir <- file.path(results_dir, site, "Metrics", forest_composition)
+  
+  # Define the names of the metrics
+  metric_files <- c("lidarlai_res_10_m.tif", 
+                    "s2lai_res_10_m.tif",
+                    "lcv_res_10_m.tif",
+                    "mean_res_10_m.tif",
+                    "max_res_10_m.tif",
+                    "lskew_res_10_m.tif",
+                    "shade_res_10_m.tif",
+                    "slope_res_10_m.tif",
+                    "aspect_res_10_m.tif",
+                    "cv_res_10_m.tif",
+                    "rumple_res_10_m.tif",
+                    "vci_res_10_m.tif",
+                    "vdr_res_10_m.tif",
+                    "gap_fraction_res_10_m.tif",
+                    # "ndvi_summer_res_10_m.tif",
+                    # "stand_type_raster.tif",
+                    # "dtm.tif",
+                    "cv_lad_res_10_m.tif"
+  )
+  
+  # Function to load and extract raster values
+  load_metric <- function(filename) {
+    rast <- terra::rast(file.path(metrics_dir, filename))
+    # print(rast)
+    values(rast)
+  }
+  
+  # Load all the metrics in a list
+  metrics_values <- lapply(metric_files, load_metric)
+  
+  # Assign meaningful names to the metrics
+  names(metrics_values) <- c("lidar_lai", 
+                             "s2_lai",
+                             "lcv",
+                             "mean",
+                             "max",
+                             "lskew",
+                             "shade",
+                             "slope",
+                             "aspect",
+                             "cv",
+                             "rumple",
+                             "vci",
+                             "vdr",
+                             "gap_fraction",
+                             # "ndvi",
+                             # "stands",
+                             # "dtm",
+                             "cv_lad"
+  )
+  # print(str(metrics_values))
+  
+  # Generate names for the PAD profiles
+  # pad_files <- sprintf("PAD_Profiles_updated/PAD_%.1f_40.tif", seq(2.5, 39.5, by = 1))
+
+  # Load all the PAD profile metrics in a list
+  # pad_metrics_values <- lapply(pad_files, load_metric)
+
+  # Assign meaningful names to the PAD profile metrics
+  # names(pad_metrics_values) <- sprintf("PAD_%.1f", seq(2.5, 39.5, by = 1))
+
+  # Combine the primary and PAD metrics
+  # metrics_values <- c(metrics_values, pad_metrics_values)
+  
+  # Extract coordinates (assuming all rasters have the same structure)
+  lidar_lai <- terra::rast(file.path(metrics_dir, "lidarlai_res_10_m.tif"))
+  coordinates <- xyFromCell(lidar_lai, 1:ncell(lidar_lai))
+  
+  # Add longitude and latitude to the list of metrics
+  metrics_values$lon <- coordinates[, 1]
+  metrics_values$lat <- coordinates[, 2]
+  
+  # Filter out NA values across all metrics
+  valid_idx <- complete.cases(do.call(cbind, metrics_values))
+  
+  # Filter metrics to retain only valid (non-NA) rows
+  valid_metrics <- lapply(metrics_values, function(x) x[valid_idx])
+  
+  # Combine all predictor variables into a data frame
+  predictors <- as.data.frame(valid_metrics)
+  # predictors$site <- site
+  
+  return(predictors)
+}
+```
+
+## Test
+
+```{r}
+# Initialize an empty list to store the data frames
+all_predictors <- list()
+
+# Load data for all sites
+for (site in sites) {
+  site_data <- load_metrics_for_site(site, results_dir, forest_composition)
+  
+  all_predictors[[site]] <- site_data  # Store the data frame in the list
+}
+# Combine all the data frames into one
+combined_predictors <- do.call(rbind, all_predictors)
+```
+
+```{r}
+partialPlot <- function(obj, pred.data, xname, n.pt = 9, discrete.x = FALSE, 
+                        subsample = pmin(1, n.pt * 100 / nrow(pred.data)), which.class = NULL,
+                        xlab = deparse(substitute(xname)), ylab = "", type = if (discrete.x) "p" else "b",
+                        main = "", rug = TRUE, seed = NULL, show_plot = TRUE, target_var,
+                        save_path = NULL, ...) {
+  stopifnot(dim(pred.data) >= 1)
+  
+  # Subsample the data if needed
+  if (subsample < 1) {
+    if (!is.null(seed)) {
+      set.seed(seed)
+    } 
+    n <- nrow(pred.data)
+    picked <- sample(n, trunc(subsample * n))
+    pred.data <- pred.data[picked, , drop = FALSE]
+  }
+  
+  xv <- pred.data[, xname]
+  
+  # Define quantiles from 0.1 to 0.9 (9 points)
+  if (discrete.x) {
+    x <- unique(xv)
+  } else {
+    x <- quantile(xv, probs = seq(0.1, 0.9, length.out = n.pt), names = FALSE)  # Quantiles from 0.1 to 0.9
+  }
+  
+  y <- numeric(length(x))
+  
+  isRanger <- inherits(obj, "ranger")
+  isLm <- inherits(obj, "lm") | inherits(obj, "lmrob") | inherits(obj, "lmerMod")
+  
+  # Calculate partial dependence by predicting for each x[i]
+  for (i in seq_along(x)) {
+    pred.data[, xname] <- x[i]
+
+    if (isRanger) {
+      if (!is.null(which.class)) {
+        if (obj$treetype != "Probability estimation") {
+          stop("Choose probability = TRUE when fitting ranger multiclass model") 
+        }
+        preds <- predict(obj, pred.data)$predictions[, which.class]
+      }
+      else {
+        preds <- predict(obj, pred.data)$predictions
+      }
+    } else if (isLm) {
+      preds <- predict(obj, pred.data) 
+    } else {
+      if (!is.null(which.class)) {
+        preds <- predict(obj, pred.data, reshape = TRUE)[, which.class + 1] 
+      } else {
+        preds <- predict(obj, pred.data)
+      }
+    }
+    
+    y[i] <- mean(preds)
+  }
+  
+  if (show_plot) {
+    # Save the plot if save_path is provided
+    if (!is.null(save_path)) {
+      png(filename = file.path(save_path, paste0("pp_", xname, "_target_", target_var, ".png")), width = 1920, height = 1080, res = 300)  
+    }
+
+    # Create the plot
+    plot(x, y, xlab = target_var, ylab = ylab, 
+         main = paste("Partial Plot for", xname, "target var", target_var), 
+         type = type, ...)
+    
+    if (!is.null(save_path)) {
+      dev.off()  # Close the graphical device
+    }
+  }
+  
+  # Return the partial dependence data for further use
+  data.frame(x = x, y = y)
+}
+```
+
+```{r}
+biPartialPlot <- function(obj, pred.data, xname1, xname2, n.pt = 9, discrete.x1 = FALSE, discrete.x2 = FALSE, 
+                          subsample = pmin(1, n.pt * 100 / nrow(pred.data)), which.class = NULL,
+                          xlab1 = deparse(substitute(xname1)), xlab2 = deparse(substitute(xname2)), 
+                          ylab = "", main = "", rug = TRUE, seed = NULL, show_plot = TRUE, target_var,
+                          save_path = NULL, ...) {
+  
+  stopifnot(dim(pred.data) >= 1)
+  
+  # Subsample the data if needed
+  if (subsample < 1) {
+    if (!is.null(seed)) {
+      set.seed(seed)
+    } 
+    n <- nrow(pred.data)
+    picked <- sample(n, trunc(subsample * n))
+    pred.data <- pred.data[picked, , drop = FALSE]
+  }
+  
+  xv1 <- pred.data[, xname1]
+  xv2 <- pred.data[, xname2]
+  
+  # Define quantiles for each predictor
+  if (discrete.x1) {
+    x1 <- unique(xv1)
+  } else {
+    x1 <- quantile(xv1, probs = seq(0.1, 0.9, length.out = n.pt), names = FALSE)
+  }
+  
+  if (discrete.x2) {
+    x2 <- unique(xv2)
+  } else {
+    x2 <- quantile(xv2, probs = seq(0.1, 0.9, length.out = n.pt), names = FALSE)
+  }
+  
+  # Create a grid for x1 and x2
+  grid <- expand.grid(x1 = x1, x2 = x2)
+  y <- numeric(nrow(grid))
+  
+  isRanger <- inherits(obj, "ranger")
+  isLm <- inherits(obj, "lm") | inherits(obj, "lmrob") | inherits(obj, "lmerMod")
+  
+  # Calculate partial dependence by predicting for each combination of x1 and x2
+  for (i in seq_len(nrow(grid))) {
+    pred.data[, xname1] <- grid$x1[i]
+    pred.data[, xname2] <- grid$x2[i]
+
+    if (isRanger) {
+      if (!is.null(which.class)) {
+        if (obj$treetype != "Probability estimation") {
+          stop("Choose probability = TRUE when fitting ranger multiclass model") 
+        }
+        preds <- predict(obj, pred.data)$predictions[, which.class]
+      }
+      else {
+        preds <- predict(obj, pred.data)$predictions
+      }
+    } else if (isLm) {
+      preds <- predict(obj, pred.data) 
+    } else {
+      if (!is.null(which.class)) {
+        preds <- predict(obj, pred.data, reshape = TRUE)[, which.class + 1] 
+      } else {
+        preds <- predict(obj, pred.data)
+      }
+    }
+    
+    y[i] <- mean(preds)
+  }
+  
+  # Plotting the results
+  if (show_plot) {
+    if (!is.null(save_path)) {
+      png(filename = file.path(save_path, paste0("bi_partial_", xname1, "_", xname2, "_target_", target_var, ".png")), width = 1920, height = 1080, res = 300)  
+    }
+
+    # Create the plot
+    filled.contour(x1, x2, matrix(y, nrow = length(x1)), 
+                   xlab = xlab1, ylab = xlab2, 
+                   main = paste("Bi-Partial Plot for", xname1, "and", xname2,
+                                "target var", target_var), ...)
+    
+    if (!is.null(save_path)) {
+      dev.off()  # Close the graphical device
+    }
+  }
+  
+  # Return the partial dependence data for further use
+  data.frame(x1 = rep(x1, each = length(x2)), x2 = rep(x2, times = length(x1)), y = y)
+}
+```
+
+
+## Function to run different RF scenarios
+
+```{r}
+run_rf_cases <- function(sites, results_dir, output_dir, 
+                         forest_composition, use_dummies, target_var,
+                         subsampling = FALSE, save_results = TRUE) {
+  
+  # Initialize an empty list to store the data frames
+  all_predictors <- list()
+  
+  # # Load data for all sites
+  for (site in sites) {
+    site_data <- load_metrics_for_site(site, results_dir, forest_composition)  # No dummies here
+    if (target_var == "deltaLAI") {
+      site_data$deltaLAI <- site_data$lidar_lai - site_data$s2_lai
+      site_data$lidar_lai <- NULL
+      # site_data$s2_lai <- NULL
+    }
+
+    all_predictors[[site]] <- site_data  # Store the data frame in the list
+  }
+  # combined_predictors <- load_metrics_for_site(sites, results_dir, forest_composition)
+  # Combine all the data frames into one
+  combined_predictors <- do.call(rbind, all_predictors)
+  
+  # If using dummies, create dummy variables for the 'site' variable
+  if (use_dummies) {
+    # Convert the 'site' and 'stands' columns to factors
+    combined_predictors$site <- as.factor(combined_predictors$site)
+    combined_predictors$stands <- as.factor(combined_predictors$stands)
+    # Create dummy variables for 'site' and remove the original 'site' column
+    dummy_vars_site <- model.matrix(~ site - 1, data = combined_predictors)
+    colnames(dummy_vars_site) <- gsub("site", "site_", colnames(dummy_vars_site))
+    
+    # Create dummy variables for 'stands' and remove the original 'stands' column
+    dummy_vars_stands <- model.matrix(~ stands - 1, data = combined_predictors)
+    colnames(dummy_vars_stands) <- gsub("stands", "stands_", colnames(dummy_vars_stands))
+    
+    # Combine the dummy variables with the rest of the predictors
+    combined_predictors <- cbind(combined_predictors[, !(colnames(combined_predictors) %in% c(
+      "site",
+      "stands"))],
+                                  as.data.frame(dummy_vars_site),
+                                  as.data.frame(dummy_vars_stands))
+  }
+  
+  # Shuffle
+  if (subsampling){
+    combined_predictors <- combined_predictors[sample(nrow(combined_predictors), 1000), ]
+  }
+  else {
+    combined_predictors <- combined_predictors[sample(nrow(combined_predictors)), ]
+  }
+  # print(str(combined_predictors))
+  
+  # Select the appropriate target variable for the RF formula
+  if (target_var == "lidar_lai") {
+    formula <- lidar_lai ~ .
+  } else if (target_var == "deltaLAI") {
+    formula <- deltaLAI ~ .
+  } else if (target_var == "s2_lai") {
+    formula <- s2_lai ~ .
+  }
+  
+  # Fit the Random Forest model using ranger
+  rf_model <- ranger(
+    formula = formula,
+    data = combined_predictors,
+    num.trees = 300,
+    mtry = floor((ncol(combined_predictors) - 1) / 3),
+    importance = "permutation",
+    min.node.size = 5,
+    num.threads = 12,
+    splitrule = "extratrees",
+    num.random.splits = 10,
+    sample.fraction = 0.05
+  )
+  # print(str(rf_model))
+  # Examine a particular tree
+  # library(rpart)
+  # t <- rpart(formula,combined_predictors)
+  # library(rpart.plot)
+  # rpart.plot(t)
+  # Extract model evaluation metrics
+  oob_mse <- round(rf_model$prediction.error, 2)
+  r_squared <- round(rf_model$r.squared, 2)
+  
+  # Extract variable importance
+  varImp <- sort(rf_model$variable.importance, decreasing = TRUE)
+
+  # Plot and save the variable importance plot
+  if (save_results) {
+    plot_file <- file.path(output_dir,
+                           paste0(target_var,
+                                  ifelse(use_dummies,
+                                         "_with_dummies", "_no_dummies"),
+                                  "_importance.png"))
+    png(plot_file, width = 1920, height = 1080, res = 300)
+  }
+
+  barplot(varImp, main = paste("Variable Importance for",
+                               target_var,
+                               ifelse(use_dummies,
+                                      "with Dummies", "without Dummies")),
+          las = 2, cex.names = 0.7)
+
+
+  # Add MSE and R² to the plot as text
+  # mse_text <- paste("OOB MSE:", oob_mse)
+  # r2_text <- paste("R²:", r_squared)
+
+  # Add the text to the plot
+  # text(x = 10, y = max(varImp) - 1,
+  #      labels = paste(mse_text, "\n", r2_text),
+  #      pos = 4, cex = 1.6, col = "blue")
+
+
+  if (save_results) {
+    dev.off()  # Close the device if saving
+  }
+  
+  # Save the model's key metrics to a file
+  if (save_results) {
+    metrics_file <- file.path(output_dir, 
+                              paste0(target_var, 
+                                     ifelse(use_dummies, 
+                                            "_with_dummies", "_no_dummies"), 
+                                     "_metrics.txt"))
+    writeLines(c(
+      paste("OOB MSE:", oob_mse),
+      paste("R Squared:", r_squared)
+    ), con = metrics_file)
+  } else {
+    # Print the results to the console if not saving
+    cat("OOB MSE:", oob_mse, "\n")
+    cat("R Squared:", r_squared, "\n")
+  }
+  for (var in colnames(combined_predictors[, setdiff(names(combined_predictors), target_var)])){
+    partialPlot(obj = rf_model, 
+              pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+              xname = var, 
+              save_path = output_dir,
+              target_var = target_var,
+              show_plot = TRUE)
+  }
+  # partialPlot(obj = rf_model, 
+  #             pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+  #             xname = "lcv", 
+  #             save_path = output_dir,
+  #             target_var = target_var,
+  #             show_plot = TRUE)
+  # partialPlot(obj = rf_model, 
+  #             pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+  #             xname = "mean", 
+  #             save_path = output_dir,
+  #             target_var = target_var,
+  #             show_plot = TRUE)
+  # partialPlot(obj = rf_model, 
+  #             pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+  #             xname = "gap_fraction", 
+  #             save_path = output_dir,
+  #             target_var = target_var,
+  #             show_plot = TRUE)
+  # partialPlot(obj = rf_model, 
+  #             pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+  #             xname = "max", 
+  #             save_path = output_dir,
+  #             target_var = target_var,
+  #             show_plot = TRUE)
+  # partialPlot(obj = rf_model, 
+  #             pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+  #             xname = "shade", 
+  #             save_path = output_dir,
+  #             target_var = target_var,
+  #             show_plot = TRUE)
+  biPartialPlot(obj = rf_model, 
+                pred.data = combined_predictors[, setdiff(names(combined_predictors), target_var)], 
+                xname1 = "lcv", 
+                xname2 = "mean", 
+                save_path = output_dir,
+                target_var = target_var, 
+                show_plot = TRUE)
+  
+  # Remove the model from memory to free up space
+  rm(rf_model)
+  gc()  # Force garbage collection
+  
+  return(list(oob_mse = oob_mse,
+              var_explained = r_squared,
+              variable_importance = varImp
+              )
+         )
+}
+```
+
+```{r}
+run_quantile_rf_cases <- function(sites, results_dir, output_dir, 
+                         forest_composition, use_dummies, target_var,
+                         subsampling = FALSE, save_results = TRUE) {
+  
+  # Initialize an empty list to store the data frames
+  all_predictors <- list()
+  
+  # Load data for all sites
+  for (site in sites) {
+    site_data <- load_metrics_for_site(site, results_dir, forest_composition)
+    if (target_var == "deltaLAI") {
+      site_data$deltaLAI <- site_data$lidar_lai - site_data$s2_lai
+      site_data$lidar_lai <- NULL
+      site_data$s2_lai <- NULL
+    }
+    
+    all_predictors[[site]] <- site_data  # Store the data frame in the list
+  }
+  
+  # Combine all the data frames into one
+  combined_predictors <- do.call(rbind, all_predictors)
+  
+  # If using dummies, create dummy variables for the 'site' variable
+  if (use_dummies) {
+    combined_predictors$site <- as.factor(combined_predictors$site)
+    dummy_vars <- model.matrix(~ site - 1, data = combined_predictors)
+    colnames(dummy_vars) <- gsub("site", "site_", colnames(dummy_vars))
+    combined_predictors <- cbind(combined_predictors[, !colnames(combined_predictors) %in% "site"], as.data.frame(dummy_vars))
+  }
+  
+  # Shuffle
+  if (subsampling){
+    combined_predictors <- combined_predictors[sample(nrow(combined_predictors), 10000), ]
+  } else {
+    combined_predictors <- combined_predictors[sample(nrow(combined_predictors)), ]
+  }
+  
+  # Save the 'site' column separately to associate predictions with the site later
+  site_column <- combined_predictors$site
+  str(combined_predictors)
+  
+  # Select the appropriate target variable for the RF formula
+  if (target_var == "LiDAR_LAI") {
+    formula <- lidar_lai ~ .
+  } else if (target_var == "deltaLAI") {
+    formula <- deltaLAI ~ .
+  }
+  
+  # Fit the Quantile Forest model using ranger with quantile regression
+  rf_model <- ranger(
+    formula = formula,
+    data = combined_predictors,
+    num.trees = 100,
+    mtry = floor(ncol(combined_predictors) - 1 / 3),
+    importance = "none",
+    min.node.size = 5,
+    num.threads = 12,
+    splitrule = "extratrees",
+    num.random.splits = 10,
+    sample.fraction = 0.3,
+    quantreg = TRUE,
+    keep.inbag = TRUE  # Retain inbag information for OOB predictions
+  )
+  
+  # Extract model evaluation metrics
+  oob_mse <- round(rf_model$prediction.error, 2)
+  r_squared <- round(rf_model$r.squared, 2)
+  
+  cat("OOB MSE:", oob_mse, "\n")
+  cat("R Squared:", r_squared, "\n")
+  
+  # print(str(rf_model))
+  # Predict quantiles (median and IQR) for OOB data
+  # predictions <- predict(rf_model, type = "response")
+  oob_mse <- round(rf_model$prediction.error, 2)
+  predictions_iqr <- predict(rf_model, type = "quantiles", 
+                             quantiles = c(0.25, 0.5, 0.75))
+  
+  # Extract predicted values and confidence intervals
+  median_predictions <- predictions_iqr$predictions[,2]
+  lower_bound <- predictions_iqr$predictions[,1]  # 25th percentile
+  upper_bound <- predictions_iqr$predictions[,3]  # 75th percentile
+  ci_width <- upper_bound - lower_bound  # Confidence interval width
+  
+  # Create a data frame to store predictions and associated site info
+  confidence_map <- data.frame(
+    lon = combined_predictors$lon,
+    lat = combined_predictors$lat,
+    median_lai = median_predictions,
+    lower_bound = lower_bound,
+    upper_bound = upper_bound,
+    ci_width = ci_width,
+    site = site_column  # Add the 'site' information back for association
+  )
+  
+  # Optional: Save results to the output directory
+  if (save_results) {
+    write.csv(confidence_map, file = file.path(output_dir, paste0(target_var, "_confidence_map.csv")), row.names = FALSE)
+  }
+  
+  return(list(median_predictions = median_predictions,
+              lower_bound = lower_bound,
+              upper_bound = upper_bound,
+              confidence_map = confidence_map))
+}
+
+
+```
+
+```{r}
+# Call the run_rf_cases function
+results <- run_quantile_rf_cases(sites = sites, 
+                                 results_dir = results_dir, 
+                                 output_dir = output_dir,
+                                 forest_composition = forest_composition, 
+                                 use_dummies = FALSE, 
+                                 target_var = "LiDAR_LAI",
+                                 subsampling = T, 
+                                 save_results = FALSE)
+
+# Inspect the results
+head(results$confidence_map)  # View the first few rows of the confidence map
+  
+# Filter predictions for site1
+for (site in sites) {
+  # Filter the confidence map for the current site
+  site_map <- results$confidence_map %>%
+              filter(site == !!site)
+  
+  # Create output file names for saving
+  median_lai_plot_file <- file.path(output_dir, paste0("Median_LAI_", site, ".png"))
+  ci_width_plot_file <- file.path(output_dir, paste0("CI_Width_LAI_", site, ".png"))
+  
+  # Plot the median LAI predictions for the current site
+  p1 <- ggplot(site_map, aes(x = lon, y = lat, fill = median_lai)) +
+    geom_raster() +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    labs(title = paste("Median LAI Predictions for", site), x = "Longitude", y = "Latitude")
+  
+  # Save the median LAI plot
+  ggsave(median_lai_plot_file, plot = p1, width = 10, height = 8, dpi = 300)
+  
+  # Plot the confidence interval width for the current site
+  p2 <- ggplot(site_map, aes(x = lon, y = lat, fill = ci_width)) +
+    geom_raster() +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    labs(title = paste("LAI Confidence Interval Width for", site), x = "Longitude", y = "Latitude")
+  
+  # Save the confidence interval width plot
+  ggsave(ci_width_plot_file, plot = p2, width = 10, height = 8, dpi = 300)
+}
+```
+
+```{r}
+case1 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "s2_lai",
+                      subsampling = F, save_results = TRUE)
+case2 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "lidar_lai",
+                      subsampling = F, save_results = TRUE)
+case3 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "deltaLAI",
+                      subsampling = F, save_results = F)
+```
+
+
+## 1. LiDAR LAI with dummies 20,000 obs
+
+```{r}
+case1 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "s2_lai",
+                      subsampling = F, save_results = TRUE)
+```
+
+## 2. LiDAR LAI without dummies 20,000 obs
+```{r}
+case2 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "lidar_lai",
+                      subsampling = F, save_results = TRUE)
+```
+## 3. deltaLAI with dummies 20,000 obs
+```{r}
+case3 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = F, target_var = "deltaLAI",
+                      subsampling = F, save_results = TRUE)
+```
+## 4. deltaLAI without dummies 20,000 obs
+```{r}
+a
+case4 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = FALSE, target_var = "deltaLAI",
+                      subsampling = F, save_results = FALSE)
+```
+
+## 1. LiDAR LAI with dummies all obs
+```{r}
+case1 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = TRUE, target_var = "LiDAR_LAI")
+```
+
+## 2. LiDAR LAI without dummies all obs
+```{r}
+case2 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = FALSE, target_var = "LiDAR_LAI")
+```
+
+## 3. deltaLAI with dummies all obs
+```{r}
+case3 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = TRUE, target_var = "deltaLAI")
+```
+
+## 4. deltaLAI without dummies all obs
+```{r}
+case4 <- run_rf_cases(sites = sites, results_dir = results_dir, output_dir,
+                      forest_composition = forest_composition, 
+                      use_dummies = FALSE, target_var = "deltaLAI")
+```
+
+```{r}
+run_rf_cases <- function(training_sites, test_site, results_dir, output_dir, 
+                         forest_composition, use_dummies, target_var,
+                         subsampling = FALSE, save_results = TRUE) {
+  
+  # Initialize an empty list to store the data frames
+  all_predictors <- list()
+  
+  # Load data for all sites
+  for (site in c(training_sites, test_site)) {
+    site_data <- load_metrics_for_site(site, results_dir, forest_composition)  # No dummies here
+    if (target_var == "deltaLAI") {
+      site_data$deltaLAI <- site_data$lidar_lai - site_data$s2_lai
+      site_data$lidar_lai <- NULL  # Remove lidar_lai when deltaLAI is the target
+    }
+    
+    all_predictors[[site]] <- site_data  # Store the data frame in the list
+  }
+  
+  # Combine all the data frames into one
+  combined_predictors <- do.call(rbind, all_predictors)
+  
+  # Create a 'train' column to indicate training vs testing data
+  combined_predictors$train <- ifelse(combined_predictors$site %in% training_sites, TRUE, FALSE)
+  
+  # Create training data
+  train_data <- combined_predictors[combined_predictors$train == TRUE, ]
+  
+  # Create test data
+  test_data <- combined_predictors[combined_predictors$train == FALSE, ]
+  
+  # If using dummies, create dummy variables for the 'site' variable
+  if (use_dummies) {
+    # Convert the 'site' column to a factor
+    train_data$site <- as.factor(train_data$site)
+    
+    # Create dummy variables for 'site' and remove the original 'site' column
+    dummy_vars_train <- model.matrix(~ site - 1, data = train_data)
+    colnames(dummy_vars_train) <- gsub("site", "site_", colnames(dummy_vars_train))
+    train_data <- cbind(train_data[, !colnames(train_data) %in% "site"], as.data.frame(dummy_vars_train))
+    
+    # Similarly for test data
+    test_data$site <- as.factor(test_data$site)
+    dummy_vars_test <- model.matrix(~ site - 1, data = test_data)
+    colnames(dummy_vars_test) <- gsub("site", "site_", colnames(dummy_vars_test))
+    test_data <- cbind(test_data[, !colnames(test_data) %in% "site"], as.data.frame(dummy_vars_test))
+  }
+  
+  # Shuffle
+  if (subsampling){
+    train_data <- train_data[sample(nrow(train_data), 20000), ]
+  } else {
+    train_data <- train_data[sample(nrow(train_data)), ]
+  }
+  
+  # Select the appropriate target variable for the RF formula
+  if (target_var == "LiDAR_LAI") {
+    formula <- lidar_lai ~ .
+  } else if (target_var == "deltaLAI") {
+    formula <- deltaLAI ~ .
+  }
+  
+  # Fit the Random Forest model using ranger
+  rf_model <- ranger(
+    formula = formula,
+    data = train_data,
+    num.trees = 500,
+    mtry = floor(ncol(train_data) / 3),
+    importance = "none",
+    min.node.size = 5,
+    num.threads = 12,
+    splitrule = "extratrees",
+    num.random.splits = 10,
+    sample.fraction = 0.3
+  )
+  
+  # Evaluate the model on the test set
+  test_predictions <- predict(rf_model, data = test_data)$predictions
+  
+  # Calculate evaluation metrics (if needed)
+  if (target_var == "LiDAR_LAI") {
+    test_actuals <- test_data$lidar_lai
+  } else if (target_var == "deltaLAI") {
+    test_actuals <- test_data$deltaLAI
+  }
+  
+  # Calculate Mean Squared Error (MSE) for the test set
+  test_mse <- mean((test_predictions - test_actuals) ^ 2)
+  
+  ss_res <- sum((test_actuals - test_predictions) ^ 2)
+  ss_tot <- sum((test_actuals - mean(test_actuals)) ^ 2)
+  test_r_squared <- 1 - (ss_res / ss_tot)
+  
+  # Extract model evaluation metrics
+  oob_mse <- round(rf_model$prediction.error, 2)
+  r_squared <- round(rf_model$r.squared, 2)
+  
+  # Extract variable importance
+  # varImp <- sort(rf_model$variable.importance, decreasing = TRUE)
+  
+  # Plot and save the variable importance plot
+  if (save_results) {
+    plot_file <- file.path(output_dir, 
+                           paste0(target_var, 
+                                  ifelse(use_dummies, 
+                                         "_with_dummies", "_no_dummies"), 
+                                  "_importance.png"))
+    png(plot_file, width = 1920, height = 1080, res = 300)
+  }
+  
+  # barplot(varImp, main = paste("Variable Importance for",
+  #                              target_var, 
+  #                              ifelse(use_dummies, 
+  #                                     "with Dummies", "without Dummies")),
+  #         las = 2, cex.names = 0.7)
+  
+  # Add MSE and R² to the plot as text
+  mse_text <- paste("OOB MSE:", oob_mse)
+  r2_text <- paste("R²:", r_squared)
+  
+  # Add the text to the plot
+  # text(x = 10, y = max(varImp) - 1, 
+  #      labels = paste(mse_text, "\n", r2_text), 
+  #      pos = 4, cex = 1.6, col = "blue")
+  
+  if (save_results) {
+    dev.off()  # Close the device if saving
+  }
+  
+  # Save the model's key metrics to a file
+  if (save_results) {
+    metrics_file <- file.path(output_dir, 
+                              paste0(target_var, 
+                                     ifelse(use_dummies, 
+                                            "_with_dummies", "_no_dummies"), 
+                                     "_metrics.txt"))
+    writeLines(c(
+      paste("OOB MSE:", oob_mse),
+      paste("Test MSE:", test_mse),
+      paste("R Squared:", r_squared)
+    ), con = metrics_file)
+  } else {
+    # Print the results to the console if not saving
+    cat("OOB MSE:", oob_mse, "\n")
+    cat("Test MSE:", test_mse, "\n")
+    cat("R Squared:", r_squared, "\n")
+    cat("Test R Squared:", test_r_squared, "\n")
+  }
+  
+  # Remove the model from memory to free up space
+  rm(rf_model)
+  gc()  # Force garbage collection
+  
+  return(list(oob_mse = oob_mse,
+              test_mse = test_mse,
+              var_explained = r_squared
+              # variable_importance = varImp
+  )
+  )
+}
+
+```
+
+```{r}
+# Define your sites
+sites <- c("Aigoual", "Blois", "Mormal")
+
+# Train using Aigoual and Blois, test on Mormal
+results <- run_rf_cases(training_sites = sites[1:2], 
+                        test_site = sites[3], 
+                        results_dir = results_dir, 
+                        output_dir = output_dir, 
+                        forest_composition = forest_composition, 
+                        use_dummies = FALSE, 
+                        target_var = "LiDAR_LAI", 
+                        subsampling = FALSE, 
+                        save_results = FALSE)
+
+# Check the results
+print(results)
+```
+

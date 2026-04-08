@@ -1,0 +1,435 @@
+---
+title: "calcul_metriques_BLOIS"
+author: "marianne Laslier d'après S. Durrieu"
+date: "13/06/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+###########################
+############################
+# Exemple d'utilisation de lidR pour calculer des metriques 
+# 
+# Auteur: Marianne Laslier adapté de S. Durrieu
+# Date: 14/04/2022 adapté du 14/02/2022
+###########################
+
+### Installing libraries: enter install.package() or use the tab "packages" (on the right)
+#install.package("lidR")
+#install.packages("data.table")
+#install.packages("raster")
+
+
+```{r}
+
+#### Download libraries
+
+# To call help just print ? name_of_function
+
+
+library("lidR")
+library("rgdal")
+library("sp")
+library(tidyverse)    #pour tester les noms et etablir les correspondances entre fichiers
+
+# gestion memoire des fichiers temporaires ou de travail
+
+# write("TMP = 'E:/DATA/Temp_calculs'", file=file.path(Sys.getenv('R_USER'), '.Renviron'))
+getwd()
+#setwd("E:/DATA/Temp_calculs")   # si besoin de place possible de changer le repertorie de travail
+memory.limit(4000000000)
+
+rm(list=ls())     # remove objects from the environment
+gc()       # can help R to return memory to the operation system if a large object was removed
+
+```
+
+Dossier de travail spécifique à BLOIS
+```{r}
+##### chaque placette est dans un dossier spécifique
+### dossier de base
+
+mainDir="C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//Blois_buffer100m"
+liste_dir=dir(mainDir)
+
+### dossier du/des MNTs
+MNT_dir=""
+
+### dossier de résultats
+outDir="C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//resultats"
+```
+I\ Lecture des données spécifiques à BLOIS
+
+```{r}
+lasDpath=paste(mainDir)
+ #### lecture du las
+  ## lire le las
+listlas = readALSLAScatalog(lasDpath)
+  
+  # print the names of all the files in the catalog 
+listlas@data$filename
+  
+  #Plot the limits of las tiles included in the catalog; can take some time if the data set is large
+  
+plot(listlas)
+
+#### MNT complet sur BLOIS
+MNT=raster("C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//MNT_50cm//mnt_blois.tif")
+
+##### BD TOPO
+batiments_shp <- readOGR(dsn = "C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS", layer = 'fusion_bati')
+
+  
+  
+  ###### Lecture du shape des placettes terrain pour définir les placettes pour lesquelles il faut calculer les metriques ; il faut donner un vecteur des coordonnees des centres, Xc, Yc et des rayons s'ils varient
+shape_plots <- readOGR(dsn = "C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//placettes", layer = 'placettes_blois')
+proj4string(shape_plots)  # verifie le systeme de projection
+  
+id_plot_shape=shape_plots@data$id_plot
+  
+Xc <- coordinates(shape_plots)[,"coords.x1"]    # recupere les coordonnees X des centres des placettes
+Yc <- coordinates(shape_plots)[,"coords.x2"]    # recupere les coordonnees Y des centres des placettes
+  
+  
+```
+II\ Fonction de Sylvie pour extraire les métriques
+```{r}
+#### fonction de sylvie pour extraire toutes les métriques
+metriques_mormal_1 <- function(las_i_h, seuils_veg, seuil_gap)      # las_i_h fihier las de la placette, seuils veg vecteur de 3 valeurs bas, int, haut (eg. 1,2,7), seuil_gap seuil pour les gaps
+{
+  # rumple index sur chm avec fct bouche trou et assez lisse
+  chm_i <- grid_canopy(las_i_h, res = 1, pitfree(thresholds = c(0, 2, 5, 10, 15), max_edge = c(0, 1), subcircle = 0.5))
+  ##### si affichage chm ombre
+  # crs(chm_i)<- CRS('+init=EPSG:2154')
+  # chm_prod <- terrain(chm_i, opt = c("slope", "aspect"))
+  # chm_hillshade <- hillShade(slope = chm_prod$slope, aspect = chm_prod$aspect)
+  # plot(chm_hillshade, col = grey.colors(50, 0, 1), legend = FALSE)
+  # 
+  
+  
+  rumple_i <- rumple_index(chm_i)
+  
+  # hauteurs des pts et metriques derivees des H
+  Z_i <- las_i_h@data$Z 
+  Z_i_veg <- filter_poi(las_i_h, Classification == 4L)@data$Z     # liste des Z des pts vegetation
+  Z_i_veg_seuil_bas <- filter_poi(las_i_h, Classification == 4L & Z > seuils_veg[2])@data$Z       # liste des Z des pts vegetation au dessus du seuil vegetation basse
+  
+  # si aucun pts vegetation dans la placette
+  if (length(Z_i_veg) == 0) {   
+    Hmax_i <- max(Z_i)
+    VCI_i <-NA
+    pad_i <-NULL
+    pad_i$z <-0
+    pad_i$lad <- NA # à modifier 
+    CV_PAD_i <- NA
+    PAI_i <- NA
+    max_PAD_i <- NA
+    H_max_PAD_i <- NA
+    
+    max_PAD_i_haute <- NA
+    H_max_PAD_i_haute <- NA
+    max_PAD_i_inter <- NA
+    H_max_PAD_i_inter <- NA
+    max_PAD_i_basse <- NA
+    H_max_PAD_i_basse <- NA
+    
+    
+  } else {
+    
+    Hmax_i <- max(Z_i)        # H max de la placette
+    VCI_i <- VCI( Z_i_veg_seuil_bas, by = 1, zmax= Hmax_i )    # vertical complexity index  de la placette
+    
+    # PAD/LAD  et metriques issues du PAD/LAD
+    pas = 1
+    #pad_i <-LAD(Z_i, dz=pas, k=0.5, z0=seuils_veg[1]-pas)    # pb de calul pour certianes placettes; bug lidR 
+    
+    # solution pour contourner le pb
+    
+    Z_0 <- seuils_veg[1]- ceiling(seuils_veg[1]/pas)*pas
+    id_dep <- ((seuils_veg[1]- Z_0) / pas) +1
+    
+    pad_i <-LAD(Z_i, dz=pas, k=0.5, z0=Z_0)
+    pad_i <- pad_i[id_dep:dim(pad_i)[1],]
+    
+    if (dim(pad_i)[1] == 0) {
+      
+      pad_i <- NULL
+      nb_indice_z <- ceiling(Hmax_i - (seuils_veg[1] + 0.5*pas )) 
+      
+      pad_i <- data.frame(matrix(NA,ncol= 2, nrow=nb_indice_z)) 
+      colnames(pad_i) = c("z", "lad")
+      pad_i$z <- seq(from = (seuils_veg[1]+0.5*pas) ,to = (seuils_veg[1]+ (nb_indice_z - 0.5)*pas), by =pas) 
+      pad_i$lad <- rep(NA, nb_indice_z)
+      
+      CV_PAD_i <- NA
+      PAI_i <- NA
+      max_PAD_i <- NA
+      H_max_PAD_i <- NA
+      
+      max_PAD_i_haute <- NA
+      H_max_PAD_i_haute <- NA
+      max_PAD_i_inter <- NA
+      H_max_PAD_i_inter <- NA
+      max_PAD_i_basse <- NA
+      H_max_PAD_i_basse <- NA
+    } else {
+      
+      CV_PAD_i <- 100 * sd(pad_i$lad, na.rm = TRUE) / mean(pad_i$lad, na.rm = TRUE)    # coef variation du LAD
+      PAI_i <- sum(pad_i$lad, na.rm = TRUE)     # plant area index
+      
+      max_PAD_i <- max(pad_i$lad, na.rm = TRUE)          # LAD max
+      H_max_PAD_i <- pad_i$z[which(pad_i$lad==max_PAD_i)]  # Hauteur ou se situe le LAD max
+      
+      max_PAD_i_haute <- NA
+      H_max_PAD_i_haute <- NA
+      max_PAD_i_inter <- NA
+      H_max_PAD_i_inter <- NA
+      max_PAD_i_basse <- NA
+      H_max_PAD_i_basse <- NA
+      
+      max_layer <- max(pad_i$z)
+      
+      if (max_layer > seuils_veg[3])
+      {
+        
+        indice_z_haut <- ceiling((seuils_veg[3] +0.5*pas - seuils_veg[1]))    
+        indice_z_int <- ceiling((seuils_veg[2] +0.5*pas - seuils_veg[1]))
+        
+        max_PAD_i_haute <- max(pad_i$lad[indice_z_haut:dim(pad_i)[1]], na.rm = TRUE) 
+        H_max_PAD_i_haute <- pad_i$z[indice_z_haut:dim(pad_i)[1]][which(pad_i$lad[indice_z_haut:dim(pad_i)[1]]== max_PAD_i_haute)]
+        
+        max_PAD_i_inter <- max(pad_i$lad[indice_z_int:(indice_z_haut-1)], na.rm = TRUE) 
+        H_max_PAD_i_inter <- pad_i$z[indice_z_int:(indice_z_haut-1)][which(pad_i$lad[indice_z_int:(indice_z_haut-1)]== max_PAD_i_inter)]
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+        
+      } else if (max_layer >seuils_veg[2] & max_layer <= seuils_veg[3]) {
+        
+        indice_z_int <- ceiling((seuils_veg[2] +0.5*pas - seuils_veg[1]))  
+        max_PAD_i_inter <- max(pad_i$lad[indice_z_int:dim(pad_i)[1]], na.rm = TRUE) 
+        H_max_PAD_i_inter <- pad_i$z[indice_z_int:dim(pad_i)[1]][which(pad_i$lad[indice_z_int:dim(pad_i)[1]]== max_PAD_i_inter)]
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+      } else {
+        
+        max_PAD_i_basse <- max(pad_i$lad[1:(indice_z_int-1)], na.rm = TRUE) 
+        H_max_PAD_i_basse <- pad_i$z[1:(indice_z_int-1)][which(pad_i$lad[1:(indice_z_int-1)]== max_PAD_i_basse)]
+        
+      }
+    }
+  }
+  # gap fraction raster ave seuil de hauteur pour definir les trouees
+  chm_tr_i <- grid_canopy(las_i_h, res=0.5, p2r() )    # raster moins lisse que pour rumple, restitue mieux les trouees 
+  gapf_raster_i <- 100 * (length(chm_tr_i@data@values[!is.na(chm_tr_i@data@values) & chm_tr_i@data@values < seuil_gap ]))/ ( length( chm_tr_i@data@values[!is.na(chm_tr_i@data@values)] ) )
+  
+  # gap fraction issu du ratio des premiers retours parvenant sous le seuil des hauteurs par rapport au nbre total de premier retours
+  
+  gapf_pts_i <- 100 * dim(filter_poi(las_i_h, ReturnNumber ==1L & Z <seuil_gap)@data)[1] /  dim(filter_first(las_i_h)@data)[1]
+  
+  
+  metrics = list(rumple_i,
+                 Hmax_i, VCI_i,
+                 CV_PAD_i, PAI_i, max_PAD_i, H_max_PAD_i, 
+                 max_PAD_i_haute, H_max_PAD_i_haute, max_PAD_i_inter, H_max_PAD_i_inter, max_PAD_i_basse, H_max_PAD_i_basse,
+                 gapf_raster_i, gapf_pts_i,
+                 pad_i
+  )
+  names(metrics)=c("Rumple_index",
+                   "Hmax", "VCI",
+                   "CV_PAD", "PAI", "Max_PAD", "H_maxPAD",
+                   "Max_PAD_haut", "H_maxPAD_haut", "Max_PAD_inter", "H_maxPAD_inter", "Max_PAD_bas", "H_maxPAD_bas",
+                   "Gap_fraction_raster", "Gap_fraction_pts",
+                   "Profil_pad" )
+  
+  return(metrics)
+  
+}
+```
+
+V/ prétraitements sur les placettes de 100m
+```{r}
+
+for ( i in 1: length(id_plot_shape))## Pour toutes les placettes
+  {
+  ### PRETRAITEMENTS   
+    
+    las_i <- clip_circle(readLAS(listlas), Xc[i], Yc[i], 100)
+    ####Virer les points correspondant à des bâtiments de la BD TOPO
+    # Points are classified as TRUE if in a polygon
+    las_merge_i <- merge_spatial(las_i, batiments_shp, "batiments")     # New attribute 'batiments' is added.
+    # virer les points classés comme bâtiments
+    las_veget_i=filter_poi(las_merge_i, batiments == FALSE)
+   
+    
+    #### normaliser le las
+    las_i_h <- normalize_height(las_veget_i, MNT)
+    
+    
+    ### Virer les points trop hauts, par ex les oiseaux (ici > 50)
+    las_filtres_i=filter_poi(las_i_h,Classification >1, Z<50)
+    
+    
+    ### sauvegarder le las dans une liste
+    writeLAS(las_filtres_i, paste(shape_plots@data$id_plot[i],".laz",sep=""), index = TRUE)
+    print(i)
+}
+
+```
+
+Script principal : Boucle sur les placettes pour extraire, pré-traiter et calculer les métriques (indépdendant du massif donc)
+```{r}
+  ###### boucle 
+  ## param de la fonction
+  seuils_veg <- c(1,2,7)    # seuil pour vegetation d'interet
+  
+  seuil_gap <- 1     # seuil pour calul des trouees
+  #r=60 ## rayon des placettes (ici 60m pour faire comme Compiegne)
+  #r=c(5,10,20,30,40,50,60,70,80,90,100)# rayon des placettes
+  r=c(1,2,2.5,3,4,6,7,7.5,8,9)#rayons plus petits testés après coup
+  r=c(9,8,7.5,7,6,4,3,2.5,2,1)
+  list_metriques <-list()
+  names_liste<- NULL
+  
+  i=1
+  t1 <- Sys.time()
+    
+for (j in 1:10)### pour tous les buffers (10 à 100m ici)
+  {
+  for ( i in 1: length(id_plot_shape))## Pour toutes les placettes
+  {
+    
+### découper la placettes du bon rayon
+    
+     las_i <- clip_circle(las=readLAS(paste("C://Users//UPJV//Desktop//RECHERCHE//lidar_IMPRINT//BLOIS//blois_buffers_100m_pretraites//",id_plot_shape[i],".laz",sep="")), Xc[i], Yc[i], r[j])
+    
+    
+### FONCTION : faire tournerla fonction de sylvie pour calculer les métriques
+  metriques_i <- metriques_mormal_1(las_i, seuils_veg, seuil_gap)
+  
+### EXPORT : sauver dans une liste le résultat
+  list_metriques[[i]] <- metriques_i
+  #names_liste[i] = paste0("placette_",shape_plots@data$id_placett[i])
+  names_liste[i] = paste0("placette_",id_plot_shape[i])
+  
+  }
+ 
+
+#### PREPARATION DU FICHIER FINAL
+names(list_metriques) <- names_liste
+  ## temps passé pour le calcul
+t2 <- Sys.time()
+temps <- t2-t1
+print(paste0("temps de calcul = ", temps))
+
+
+
+#############
+#### Transformation de la liste en data frame 
+
+####### profils PAD
+
+### rechercher la longeur max de la variable profil_pad 
+
+lad <- lapply(list_metriques, "[", "Profil_pad" )
+
+l_max <- 0
+index <- 0
+vec_z <- 0
+for (i in 1: length(lad)) { 
+  
+  l <- length(lad[i][[1]]$Profil_pad$z)
+  if ( l > l_max) {
+    index <- i
+    vec_z <- lad[i][[1]]$Profil_pad$z
+  }
+  l_max <- max(l, l_max)
+}
+
+l_max
+vec_z
+
+# preparer la nouvelle liste de variables 
+
+names_pad <- paste0("Pad_", vec_z)
+
+
+noms_metriques=c("Rumple_index",
+                 "Hmax", "VCI",
+                 "CV_PAD", "PAI", 
+                 "Max_PAD", "H_maxPAD",
+                 "Max_PAD_haut", "H_maxPAD_haut", "Max_PAD_inter", "H_maxPAD_inter", "Max_PAD_bas", "H_maxPAD_bas",
+                 "Gap_fraction_raster", "Gap_fraction_pts",
+                 names_pad)     # cf noms de la fct de calcul des metriques
+
+### initialisation du tableau des metriques
+
+Nb_col <- length(noms_metriques)
+Nb_lig <- length(list_metriques)
+
+tab_metriques <- data.frame(matrix(NA,ncol= Nb_col,nrow=Nb_lig))
+
+colnames(tab_metriques) <- noms_metriques
+rownames(tab_metriques)<- names(list_metriques)
+
+i=1
+
+
+
+for (i in 1: length(list_metriques)){
+  
+  vect <-NULL
+  vec_non_pad <-NULL
+  vec_z_pad <- NULL
+  
+  vect <- unlist(list_metriques[[i]])
+  vec_non_pad <- vect[1:15]
+  
+  tab_metriques[i, 1: 15] <- vec_non_pad
+  
+  
+  vec_z_pad <- vect[- c(1:15)]
+  # print(length(vec_z_pad))
+  tab_metriques[i, 16:(15+(length(vec_z_pad)/2))] <- vec_z_pad[(length(vec_z_pad)/2 +1):length(vec_z_pad)]
+  
+}
+
+
+tab_metriques$nom_plot <- row.names(tab_metriques)   # ajout d'une colonne noms des placettes
+
+# reorganisation; passage de la colonne des noms des placettes en premiere colonne
+
+tab_metriques <- tab_metriques[c(dim(tab_metriques)[2], 1:(dim(tab_metriques)[2]-1)) ]
+
+head(tab_metriques)
+
+
+nom_fichier=paste(outDir,"/","resultats_metriques_blois_",r[j],".csv",sep="")
+write.table(tab_metriques,nom_fichier, row.names = FALSE, col.names = TRUE, dec=".", sep = ";")
+
+}
+  
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,57 @@
+---
+title: "Mermaid Diagram"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(DiagrammeR)
+```
+
+```{r, echo=FALSE}
+mermaid("
+flowchart TD
+  subgraph Data_Sources[\"Datasets\"]
+    direction LR
+    DS_SHP[\"Shapefiles\"]
+    DS_LiDAR[\"Airborne LiDAR\"]
+    DS_S2[\"Sentinel-2\"]
+  end
+  subgraph Preprocessing[\"Preprocessing\"]
+    PP_Decid[\"Deciduous Pixels\"]
+    PP_CHM[\"CHM\"]
+    PP_Filtered[\"Deciduous > 2m Pixels\"]
+  end
+  subgraph LAI_Estimations[\"LAI Estimations\"]
+    LAI_S2[\"Sentinel-2 LAI\"]
+    LAI_LiDAR[\"LiDAR LAI\"]
+  end
+  subgraph Normalizations[\"Normalizations\"]
+    direction LR
+    NORM_DTM[\"DTM\"]
+    NORM_nDSM[\"nDSM\"]
+    NORM_LAD[\"Cumulated LAD Profiles\"]
+  end
+  subgraph Improving_S2_LAI[\"Improving Sentinel-2 LAI\"]
+    OPT_Depth[\"Optimal Depth & Normalization\"]
+    OPT_Tuning[\"Parameters Tuning\"]
+    OPT_Config[\"Optimal PROSAIL Configuration\"]
+    OPT_LAI[\"Optimal Sentinel-2 LAI\"]
+  end
+
+  DS_S2 --> PROSAIL_INIT[\"Initial PROSAIL Configuration\"]
+  PROSAIL_INIT --> LAI_S2
+  DS_LiDAR --> PP_CHM & NORM_DTM & LAI_LiDAR
+  NORM_DTM --> NORM_nDSM & NORM_LAD
+  NORM_nDSM --> NORM_LAD
+  DS_SHP --> PP_Decid
+  PP_Decid --> PP_Filtered
+  PP_CHM --> PP_Filtered
+  PP_Filtered --> LAI_LiDAR & LAI_S2
+  LAI_S2 --> OPT_Tuning & OPT_Depth
+  OPT_Tuning --> OPT_Config
+  NORM_LAD --> OPT_Depth
+  OPT_Depth --> OPT_Tuning
+  OPT_Config --> OPT_LAI
+")
+
+```

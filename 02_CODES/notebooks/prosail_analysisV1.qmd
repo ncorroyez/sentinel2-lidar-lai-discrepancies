@@ -1,0 +1,288 @@
+---
+title: "PROSAIL Optimization"
+format: pdf
+editor: visual
+---
+
+## Research Questions
+
+Is there a set of input parameters for PROSAIL performing better than the ATBD configuration ? If yes, is it the case for all sites, is it the same configuration for all sites or not ? Is it much outperforming ? Does integrating LiDAR LAI over a few meters from the top of the canopy (according to the hypothesis that the relationship between LiDAR LAI and Sentinel-2 is the best for a few meters depth, because Sentinel-2 seems to see only the top of the canopy) help finding a better configuration set ?
+
+## Objectives
+
+We aim at identifying configuration(s) of PROSAIL hybrid inversion leading to an optimal consistency between LAI produced from S2 and ALS data. We will use data from three sites: Aigoual, Blois and Mormal. The same type of information is available from each site.
+
+## Data
+
+ALS LiDAR: 1/ LAI (Beer-Lambert), 2/ cumulated PAD Profiles: from the top of the canopy to the ground, one-meter cumulated one-by-one layers
+
+Sentinel-2: LAI (PROSAIL): 1/ ATBD (reference), 2/ lot more configurations that we will explore
+
+## Methods
+
+![](images/clipboard-3079143376.png)
+
+#### Sampling
+
+To save time, but also to study the LiDAR-S2 relationship in several conditions, we sampled points for three distinct methods. We assessed if one technique was better than another one for the data analysis.
+
+1/ Random sample: general behavior, likely to represent the original histograms.
+
+2/ Stratified sampling: to recreate field conditions. This is done by stratifying mean and Lskew LiDAR variables, according to their field value (60 points per site, IMPRINT ANR Project).
+
+3/ Uniform sampling: to obtain a uniform distribution of LiDAR LAI.
+
+Each sample are applied in the same way to Sentinel-2 LAI, LiDAR LAI, and LiDAR cumulated PAI profiles.
+
+#### PROSAIL Inversion
+
+To explore variability in key biophysical parameters, we tested multiple configurations based on predefined ranges and distributions. Each parameter was sampled using either a uniform or Gaussian distribution, as detailed below:
+
+-   **LIDFa** (Leaf Inclination Distribution Function, averaged):
+
+    -   Uniform: Ranges from \[30,50\] to \[30,80\].
+
+    -   Gaussian: Mean values from 40 to 55, standard deviation (SD) = 20.
+
+-   **LAI** (Leaf Area Index):
+
+    -   Uniform: Ranges from \[0.1,5\] to \[0.1,8\].
+
+    -   Gaussian: Mean values from 3 to 7, SD = 3.
+
+-   **LMA** (Leaf Mass per Area):
+
+    -   Uniform: Ranges from \[0.002,0.02\] to \[0.002,0.035\].
+
+    -   Gaussian: Mean values from 0.01 to 0.025, SD = 0.003.
+
+-   **q** (Hot Spot):
+
+    -   Uniform: Ranges from \[0.01,0.1\] to \[0.05,0.6\].
+
+-   **BROWN** (Brown Pigment Content):
+
+    -   Uniform: Ranges from \[0,1\] to \[0,2\].
+
+-   **N** (Leaf Layers):
+
+    -   Uniform: Ranges from \[1,2\] to \[1,3\].
+
+-   **CHL** (Chlorophyll Content):
+
+    -   Uniform: Range \[0,80\].
+
+    -   Gaussian: Mean = 30, SD = 20, max = 60.
+
+-   **psoil** (Soil Reflectance Parameter):
+
+    -   Uniform: Range \[0.2,1\].
+
+| Parameter to optimize | Number of combinations |
+|-----------------------|------------------------|
+| LIDFa                 | 9                      |
+| lai                   | 10                     |
+| LMA                   | 10                     |
+| BROWN                 | 4                      |
+| CHL                   | 3                      |
+| N                     | 3                      |
+| psoil                 | 2                      |
+| q                     | 6                      |
+
+9x10x10x4x3x3x2x6 = 388,800 combinations. Would take months.
+
+-\> Divide in two parts. Arbitrarily:
+
+1/ LIDFa+lai+LMA = 9\*10\*10 = 900 combinations (A)
+
+2/ BROWN+CHM+N+psoil+q = 4\*3\*3\*2\*6 = 432 combinations (B)
+
+-\> Way more sustainable.
+
+We will compare these distributions with the reference ATBD. As a reminder, ATBD distributions are:
+
+| Parameter | Distribution                                    |
+|-----------|-------------------------------------------------|
+| LIDFa     | Min: 30, max: 80, mean: 60, std: 30             |
+| lai       | Min: 0, max: 15, mean: 2, std: 3                |
+| LMA       | Min: 0.003, max: 0.011, mean: 0.005, std: 0.005 |
+| BROWN     | Min: 0, max: 2, mean: 0, std: 3                 |
+| CHL       | Min: 20, max: 90, mean: 45, std: 30             |
+| N         | Min: 1.2, max: 1.8, mean: 1.5, std: 0.3         |
+| psoil     | Min: 0, max: 1, mean: 0.25, std: 0.6            |
+| q         | Min: 0.1, max: 0.5, mean: 0.2, std: 0.5         |
+
+#### LAI Comparison Analysis
+
+We want to determine if a given configuration performs better than ATBD, and at what point it outperforms. Also if some parameters are more important than others. Ideally, we want to maximize R² and minimize RMSE and bias.
+
+##### Fully Integrated LiDAR LAI & Sentinel-2 Relationship
+
+We computed R², NRMSE, Bias, between LiDAR LAI and Sentinel-2 LAI obtained by inverting PROSAIL for the presented configurations (A) and (B). We did this for the three sites and for each sampling strategy. We computed the best performing configuration in terms of either R² or NRMSE, according to the sampling method, for the three sites. This gave us three configurations per site, per metric, so six configurations per site, nine per metric, eighteen in total. We assessed the best performing configurations including all sampling methods and applied it to the two others, and same but including all sites and applied to all sites and sampling methods.
+
+So for one site, we have 7 scatterplots:
+
+1/ ATBD
+
+2/ Best performing configuration, in R² or RMSE
+
+3/ Site optimal configuration, in R² or RMSE
+
+4/ Global optimal configuration, in R² or RMSE
+
+This allowed us to see if a given configuration was the same for all sites. We also computed slope and intercept of the models, that could serve to finalize the decision.
+
+##### Cumulated PAI Profiles & Sentinel-2 Relationship
+
+We computed R², NRMSE, Bias, between Sentinel-2 LAI and LiDAR Cumulated PAI Profiles, for each normalization technique (DTM or DSM), for each sampling method, and for a list of selected depths between 1 and 38 meters. We computed the best performing configuration in terms of either R² or NRMSE, according to the sampling method, normalization technique, and depth for the three sites. If several models occur to have the same best R² or NRMSE value, one model respectively having the lowest NRMSE or highest R² is chosen. If there is still a tie, the model with the lowest bias in absolute value is selected. This reduces drastically the number of models for each site (from 31,104 per site to hundreds). For each site we can plot R² vs NRMSE for the best models in terms of R² and NRMSE to assess if there is a linear relationship between them, to facilitate the selection.
+
+## Results
+
+ALL RESULTS ARE IN MO-PULSE: smb://pnas3.stockage.inrae.fr/mo-mtd-pulse/root/\_PROJETS/2023_2026_These_Nathan_Corroyez/optimisation_prosail/04_FIGURES . It contains scatterplots, csv files, and prosail_tuning.yaml that gives the conversion between a parameter+number and its related distribution (e.g.: LIDFa.1 = 'ATBD').
+
+### Fully Integrated LiDAR LAI & Sentinel-2 Relationship
+
+#### LIDFa + lai + LMA
+
+*ATBD Metrics for Aigoual, for the three sampling methods*
+
+| Sampling method        | R²   | NRMSE | Bias  |
+|------------------------|------|-------|-------|
+| **Random**             | 0.29 | 2.90  | -1.43 |
+| **Stratified**         | 0.31 | 2.84  | -1.41 |
+| **Stratified Uniform** | 0.31 | 4.69  | -3.45 |
+
+Stratified Uniform present a large NRMSE & Bias. Stratified has the best results, not that better from random. We will take stratified sampling as the reference to analyse.
+
+*Metrics for all seven scatterplot strategies, for Aigoual, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type          | Distribution         | R²       | NRMSE    | Bias     |
+|---------------------------|----------------------|----------|----------|----------|
+| **ATBD**                  | ATBD                 | 0.31     | 0.80     | 1.41     |
+| **Best performing R²**    | LIDFa.2_lai.1_LMA.1  | **0.33** | 0.99     | 2.31     |
+| **Best performing NRMSE** | LIDFa.3_lai.10_LMA.1 | 0.31     | **0.62** | **0.06** |
+| **Site optimal R²**       | LIDFa.2_lai.1_LMA.1  | **0.33** | 0.99     | 2.31     |
+| **Site optimal NRMSE**    | LIDFa.2_lai.9_LMA.9  | 0.27     | 0.77     | -1.28    |
+| **Global optimal R²**     | LIDFa.2_lai.1_LMA.1  | **0.33** | 0.99     | 2.31     |
+| **Global optimal NRMSE**  | LIDFa.1_lai.1_LMA.9  | 0.09     | 0.76     | 0.77     |
+
+*Metrics for all seven scatterplot strategies, for Blois, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type          | Distribution         | R²       | NRMSE    | Bias  |
+|---------------------------|----------------------|----------|----------|-------|
+| **ATBD**                  | ATBD                 | 0.04     | 0.66     | **0** |
+| **Best performing R²**    | LIDFa.8_lai.2_LMA.10 | **0.16** | 0.68     | 0.34  |
+| **Best performing NRMSE** | LIDFa.7_lai.3_LMA.8  | 0.10     | **0.65** | -0.03 |
+| **Site optimal R²**       | LIDFa.8_lai.2_LMA.10 | 0.16     | 0.68     | 0.34  |
+| **Site optimal NRMSE**    | LIDFa.1_lai.1_LMA.9  | 0.14     | 0.81     | -0.95 |
+| **Global optimal R²**     | LIDFa.2_lai.1_LMA.1  | 0.01     | 0.94     | 1.15  |
+| **Global optimal NRMSE**  | LIDFa.1_lai.1_LMA.9  | 0.14     | 0.81     | -0.95 |
+
+: *Metrics for all seven scatterplot strategies, for Mormal, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type          | Distribution        | R²       | NRMSE    | Bias     |
+|---------------------------|---------------------|----------|----------|----------|
+| **ATBD**                  | ATBD                | 0.11     | 0.88     | 0.88     |
+| **Best performing R²**    | LIDFa.4_lai.6_LMA.5 | **0.12** | 0.75     | -0.09    |
+| **Best performing NRMSE** | LIDFa.4_lai.6_LMA.4 | **0.12** | **0.74** | **0.01** |
+| **Site optimal R²**       | LIDFa.2_lai.1_LMA.1 | 0.12     | 1.35     | -2.14    |
+| **Site optimal NRMSE**    | LIDFa.2_lai.9_LMA.9 | 0.11     | 1.33     | -2.06    |
+| **Global optimal R²**     | LIDFa.2_lai.1_LMA.1 | 0.11     | 1.41     | 2.27     |
+| **Global optimal NRMSE**  | LIDFa.1_lai.1_LMA.9 | 0.08     | 0.76     | 0.03     |
+
+#### BROWN + CHL + N + psoil + q
+
+*Metrics for all seven scatterplot strategies, for Aigoual, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type | Distribution | R² | NRMSE | Bias |
+|----|----|----|----|----|
+| **ATBD** | ATBD | 0.31 | 0.80 | 1.41 |
+| **Best performing R²** | BROWN.4_CHL.2_N.2_psoil.1_q.2 | **0.34** | 0.82 | 1.57 |
+| **Best performing NRMSE** | BROWN.3_CHL.1_N.1_psoil.1_q.2 | 0.31 | **0.68** | **0.76** |
+| **Site optimal R²** | BROWN.4_CHL.2_N.2_psoil.1_q.2 | **0.34** | 0.82 | 1.57 |
+| **Site optimal NRMSE** | BROWN.3_CHL.1_N.1_psoil.1_q.2 | 0.31 | **0.68** | **0.76** |
+| **Global optimal R²** | BROWN.4_CHL.2_N.2_psoil.1_q.2 | **0.34** | 0.82 | 1.57 |
+| **Global optimal NRMSE** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | 0.22 | 0.77 | 0.99 |
+
+: *Metrics for all seven scatterplot strategies, for Blois, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type | Distribution | R² | NRMSE | Bias |
+|----|----|----|----|----|
+| **ATBD** | ATBD | 0.04 | 0.66 | 0 |
+| **Best performing R²** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | **0.11** | 0.72 | -0.61 |
+| **Best performing NRMSE** | BROWN.1_CHL.2_N.3_psoil.2_q.6 | 0.07 | **0.65** | **-0.04** |
+| **Site optimal R²** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | **0.11** | 0.72 | -0.61 |
+| **Site optimal NRMSE** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | **0.11** | 0.72 | -0.61 |
+| **Global optimal R²** | BROWN.4_CHL.2_N.2_psoil.1_q.2 | 0.02 | 0.70 | 0.29 |
+| **Global optimal NRMSE** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | **0.11** | 0.72 | -0.61 |
+
+: *Metrics for all seven scatterplot strategies, for Mormal, for stratified sampling (excl. global optimal that can be from another sampling method)*
+
+| Scatterplot Type | Distribution | R² | NRMSE | Bias |
+|----|----|----|----|----|
+| **ATBD** | ATBD | 0.11 | 0.88 | 0.88 |
+| **Best performing R²** | BROWN.3_CHL.2_N.3_psoil.1_q.5 | **0.12** | 0.77 | 0.36 |
+| **Best performing NRMSE** | BROWN.3_CHL.3_N.2_psoil.1_q.2 | **0.12** | **0.75** | **0.11** |
+| **Site optimal R²** | BROWN.4_CHL.3_N.2_psoil.2_q.5 | **0.12** | 0.84 | 0.72 |
+| **Site optimal NRMSE** | BROWN.3_CHL.3_N.3_psoil.1_q.1 | 0.11 | **0.75** | 0.12 |
+| **Global optimal R²** | BROWN.4_CHL.2_N.2_psoil.1_q.2 | 0.11 | 0.96 | 1.16 |
+| **Global optimal NRMSE** | BROWN.3_CHL.3_N.2_psoil.2_q.1 | 0.10 | 0.76 | 0.13 |
+
+### Cumulated PAI Profiles & Sentinel-2 Relationship
+
+#### LIDFa + lai + LMA
+
+*R² vs NRMSE for Aigoual best models (LIDFa + lai + LMA, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_LIDFa_lai_LMA_Aigoual.png)
+
+*R² vs NRMSE for Blois best models (LIDFa + lai + LMA, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_LIDFa_lai_LMA_Blois.png)
+
+*R² vs NRMSE for Mormal best models (LIDFa + lai + LMA, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_LIDFa_lai_LMA_Mormal.png)
+
+#### BROWN + CHL + N + psoil + q
+
+*R² vs NRMSE for Aigoual best models (BROWN + CHL + N + psoil + q, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_BROWN_CHL_N_psoil_q_Aigoual.png)
+
+*R² vs NRMSE for Blois best models (BROWN + CHL + N + psoil + q, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_BROWN_CHL_N_psoil_q_Blois.png)
+
+*R² vs NRMSE for Mormal best models (BROWN + CHL + N + psoil + q, all sampling strategies included, separation norms DTM/DSM)*
+
+![](images/R2_vs_NRMSE_top_performers_BROWN_CHL_N_psoil_q_Mormal.png)
+
+For Aigoual and Mormal, globally a high R² implies a low NRMSE which is great. However, it is not the case for Blois where a trade-off has to be made. Similarly, a low depth imply a high R² and a low NRMSE for Aigoual and Mormal, whereas for Blois, for R² values superior to 0.2, depth will lower with NRMSE that highers.
+
+## Discussion
+
+### Fully Integrated LiDAR LAI & Sentinel-2 Relationship
+
+Parameters that are often selected are:
+
+All sites have a different optimal configuration. However, we can see some tendencies. LIDFa should be parametrized with a lower maximum than ATBD (around 50 to 70 degrees). LAI seems to be parametrized with a distribution that is the closest to the LiDAR LAI one, both in range and mean / std. LMA needs a larger range than ATBD one. psoil is fine with ATBD range. It is difficult to assess BROWN parameter: but by looking at slope and intercept for Aigoual and Mormal, taking a large range for BROWN seems to be the best choice. For CHL, when CHL = 3, Sentinel-2 LAI saturates at around 5 and imply strange slope and intercept, especially for Blois. CHL = ATBD appears for Aigoual but CHL = 2 is the best for Blois and Mormal, and not that far from ATBD performances for Aigoual so CHL = 2 can be taken. For N and Q it is difficult to say. For sure N = 2 or 3 so a larger range than ATBD, and for q, q = 2 is the best for Aigoual, but then it is difficult for Blois and Mormal to assess one.
+
+### Cumulated PAI Profiles & Sentinel-2 Relationship
+
+For Aigoual and Mormal, the model selection is easy: the metrics are best for low depth, and parametrization does not vary much. For Blois, it is more difficult: highest R² imply high NRMSE and high absolute bias, and lower NRMSE imply lower R². But when trade-off is achieved (R² \~= 0.2 and NRMSE and absolute bias are minimized), we retrieve similar parameter than Aigoual and Mormal ones.
+
+| Parameter | Optimal distribution |
+|-----------|----------------------|
+| **LIDFa** | 2                    |
+| **lai**   | match LiDAR LAI      |
+| **LMA**   | 1 or 6               |
+| **BROWN** | 4                    |
+| **CHL**   | 2                    |
+| **N**     | 1 or 2               |
+| **psoil** | 1                    |
+| **q**     | 2 or 3               |
+
+## Conclusion
+
+Some parametrizations provide better results than the ATBD configuration. All parameters do not have the same impact, with LIDFa, lai, and LMA seeming to contribute the most. When studying the relationship between Sentinel-2 LAI and fully-integrated LiDAR LAI, it is difficult to retain one general configuration. However, when implementing the cumulated PAD profiles, it is easier to narrow down a set of optimal parameters. Maybe studying the impact of parameters one by one (by not accumulating combinations like here) could help setting a final choice on parameters. Blois acts very differently as Aigoual and Mormal, where a trade-off between R² and NRMSE has to be done, whereas for Aigoual and Mormal both metrics are linked linearly and the choice is easy.
