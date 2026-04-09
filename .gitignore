@@ -169,3 +169,7 @@ logs/
 # Reviewer materials — kept local only, not versioned
 revision/reviewers/*.docx
 revision/reviewers/*.pdf
+
+# Reviewer materials kept local only
+revision/reviewers/*.docx
+revision/reviewers/*.pdf
