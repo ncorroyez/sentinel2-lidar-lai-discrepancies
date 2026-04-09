@@ -58,6 +58,13 @@ désordre. Claude Code ne doit PAS explorer ou modifier librement tout le dépô
   - `revision/tests/` : tests unitaires basiques
   - `revision/vignettes/` : documentation exécutable
   - `revision/README.md` : point d'entrée pour les encadrants
+  - `revision/reviewers/` : contient la decision letter, le manuscrit soumis, et
+  surtout reviewers_comments.md qui liste les commentaires reviewers avec des
+  IDs courts (R2.4, R3.minor.13, etc.). Claude Code doit consulter ce fichier à
+  chaque fois que Nathan mentionne une analyse de révision ou un ID de type
+  RN.X. Ne jamais modifier les fichiers docx ou pdf de ce dossier, ils sont en lecture
+  seule. Le fichier reviewers_comments.md peut être mis à jour si Nathan
+  demande à ajouter des notes de réponse aux commentaires.
 
 ### Scripts existants à refactoriser (pipeline du papier soumis)
 Les scripts qui produisent les figures du papier soumis et qui sont la cible
