@@ -165,3 +165,7 @@ logs/
 *.woff2
 *.ttf
 *.eot
+
+# Reviewer materials — kept local only, not versioned
+revision/reviewers/*.docx
+revision/reviewers/*.pdf
