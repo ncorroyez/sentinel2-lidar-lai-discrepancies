@@ -7,9 +7,6 @@
 #         PROSAIL-Optimization/02_CODES/Sentinel2/ for the RSE revision.
 # ---
 
-library("preprocS2")
-library("cli")
-
 # ── download_s2_cdse ──────────────────────────────────────────────────────────
 
 #' @title Download Sentinel-2 L2A imagery from Copernicus Data Space (CDSE)
@@ -200,7 +197,7 @@ load_s2_from_safe <- function(safe_path,
 #' }
 #'
 #' @export
-generate_cloud_mask <- function(S2_Stack, Cloud_path, S2source = "SAFE",
+generate_cloud_mask <- function(S2_Stack, Cloud_path, S2source,
                                 saveRaw = TRUE) {
   # Write cloud mask and get filenames
   cloudmasks <- preprocS2::save_cloud_s2(
