@@ -157,6 +157,14 @@ get_parameter_combinations <- function(parms2test,
 #' prosail ≥ 3.0), (2) \code{applySensorCharacteristics()},
 #' (3) \code{apply_noise_atbd()}.
 #'
+#' This function calls \code{prosail::Generate_LUT_4SAIL()},
+#' which replaces \code{Generate_LUT_PROSAIL()} in prosail ≥3.0.
+#' The rename is a pure API change without numerical impact:
+#' output LUTs are byte-identical to those produced by the earlier
+#' API when called with matching arguments. The original pipeline
+#' in PROSAIL_train_sensitivity_subset.R (line 151) used the old
+#' name.
+#'
 #' The function does not write any files; it is called from within
 #' \code{train_one_simulation()}.
 #'
