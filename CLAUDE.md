@@ -94,10 +94,10 @@ figure du papier. Ne jamais supposer.
 - Longueur de ligne : 90 caractères max.
 
 ### Packages autorisés
-- Géospatial : `terra`, `sf`, `lidR`, `stars`
+- Géospatial : `terra`, `sf`, `lidR`, `stars`, `sgsR`
 - Statistiques : `mgcv`, `stats`, base R
 - PROSAIL : `prosail`, `prospect` (versions CRAN de Féret)
-- Manipulation : `data.table`, optionnellement `dplyr` si cohérence locale
+- Manipulation : `data.table`, `readr`, optionnellement `dplyr` si cohérence locale
 - Graphiques : `ggplot2`, `patchwork`, `scales`
 - Utilitaires : `here`, `fs`, `cli`, `glue`, `yaml`
 - Parallélisation : `future`, `future.apply`
