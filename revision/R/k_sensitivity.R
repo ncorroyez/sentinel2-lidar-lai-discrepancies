@@ -136,9 +136,8 @@ compute_lai_als_at_k <- function(ladstack_path, k_new, k_ref = 0.5) {
 #'     \code{lm(lidar ~ s2)} (LAI_ALS as response, LAI_S2_ATBD as predictor).
 #' }
 #'
-#' \strong{Regression convention}: \code{lm(lidar ~ s2)}, matching the SM6b
-#' convention (\code{sm6_metrics.R}). The inverse SM5 convention
-#' (\code{lm(s2 ~ lidar)}) is not used here.
+#' \strong{Regression convention}: \code{lm(s2 ~ lidar)}, harmonized with
+#' the SM5 convention as of 2026-04-15.
 #'
 #' \strong{No p-values}: not requested for this reviewer analysis (R3.MAJOR
 #' focuses on the magnitude of k sensitivity, not significance testing).
@@ -189,9 +188,9 @@ compute_k_sensitivity_metrics <- function(lai_als_rast, lai_s2_atbd_rast,
   rmse_val <- sqrt(mean((lidar_vec - s2_vec) ^ 2))
   bias_val <- mean(lidar_vec - s2_vec)
 
-  # lm(lidar ~ s2): LAI_ALS as response, LAI_S2_ATBD as predictor — SM6b
-  # convention (lm(lidar ~ s2)), NOT SM5 convention (lm(s2 ~ lidar)).
-  lm_fit    <- stats::lm(lidar_vec ~ s2_vec)
+  # lm(s2 ~ lidar): LAI_S2_ATBD as response, LAI_ALS as predictor.
+  # Harmonized with SM5 convention as of 2026-04-15.
+  lm_fit    <- stats::lm(s2_vec ~ lidar_vec)
   slope_val <- stats::coef(lm_fit)[2L]
 
   data.table::data.table(
