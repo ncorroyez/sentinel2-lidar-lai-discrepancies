@@ -46,7 +46,7 @@ source(here::here("revision", "R", "h_min_sensitivity.R"))
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites        <- c("Aigoual", "Blois", "Mormal")
-h_min_values <- c(2, 3, 5)    # vegetation height thresholds to test (metres)
+h_min_values <- c(2, 3, 4, 5)    # vegetation height thresholds to test (metres)
 
 ext_dir <- here::here("03_RESULTS")
 out_dir <- here::here("revision", "output", "intermediate", "reviewers")
