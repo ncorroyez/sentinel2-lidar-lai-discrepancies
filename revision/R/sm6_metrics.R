@@ -6,11 +6,9 @@
 #         Refactor of compute_metrics v2 in:
 #         02_CODES/three_factors_analysis_final.R lines 210-296.
 #
-#         Regression convention: lm(lidar ~ s2) — lidar is the response,
-#         s2 is the predictor. Matches legacy line 270. This is the INVERSE
-#         of the SM5 convention (lm(s2 ~ lidar)) and is intentionally
-#         preserved here to faithfully reproduce the SM6 legacy behaviour.
-#         Do not harmonise with SM5 without explicit instruction.
+#         Regression convention: lm(s2 ~ lidar) — s2 is the response,
+#         lidar is the predictor. Harmonized with SM5 convention as of
+#         2026-04-15.
 #
 #         Extension relative to legacy: R2 = r^2 is added (not in legacy).
 # ---
@@ -35,18 +33,15 @@
 #'   \item \strong{Bias_pvalue}: Two-sided p-value from a one-sample t-test
 #'     on the pairwise differences, \code{t.test(lidar - s2)$p.value}.
 #'     Tests \eqn{H_0: \mu_{lidar - s2} = 0}.
-#'   \item \strong{Slope}: Slope \eqn{\hat\beta_1} of \code{lm(lidar ~ s2)}.
+#'   \item \strong{Slope}: Slope \eqn{\hat\beta_1} of \code{lm(s2 ~ lidar)}.
 #'   \item \strong{Slope_pvalue}: Two-sided p-value for
 #'     \eqn{H_0: \beta_1 = 1} (not \eqn{\beta_1 = 0}), computed as
 #'     \eqn{2 P\!\left(|t_{n-2}| > |(\hat\beta_1 - 1) / SE(\hat\beta_1)|\right)}.
 #' }
 #'
-#' \strong{Regression convention}: \code{lm(lidar ~ s2)}, where \code{lidar}
-#' is the \emph{response} and \code{s2} the \emph{predictor}. This matches
-#' \code{02_CODES/three_factors_analysis_final.R} \strong{line 270} and is
-#' the \emph{inverse} of the SM5 convention (\code{lm(s2 ~ lidar)}).
-#' The asymmetry is inherited from the legacy and is intentionally not
-#' corrected here (passe 1). Document the discrepancy when reporting results.
+#' \strong{Regression convention}: \code{lm(s2 ~ lidar)}, where \code{s2}
+#' is the \emph{response} and \code{lidar} the \emph{predictor}. Harmonized
+#' with the SM5 convention as of 2026-04-15.
 #'
 #' Groups with fewer than 10 complete (non-NA) pairs are retained in the
 #' output with \code{NA} for all metric columns and \code{n} set to the
@@ -186,11 +181,10 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
           NA_real_
         }
 
-        # ── Slope lm(lidar ~ s2) and Slope_pvalue (H0: slope = 1) ───────────
-        # Convention: lm(lidar ~ s2) — lidar is response, s2 is predictor.
-        # Matches legacy line 270 of three_factors_analysis_final.R.
-        # INVERSE of SM5 convention lm(s2 ~ lidar) — do not harmonise.
-        lm_fit    <- stats::lm(lidar_vec ~ s2_vec)
+        # ── Slope lm(s2 ~ lidar) and Slope_pvalue (H0: slope = 1) ──────────
+        # Convention: lm(s2 ~ lidar) — s2 is response, lidar is predictor.
+        # Harmonized with SM5 convention as of 2026-04-15.
+        lm_fit    <- stats::lm(s2_vec ~ lidar_vec)
         slope_val <- stats::coef(lm_fit)[2L]
         slope_p   <- if (n_obs > 2L) {
           se_slope <- summary(lm_fit)$coefficients[2L, 2L]

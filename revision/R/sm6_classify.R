@@ -74,10 +74,10 @@ classify_heterogeneity <- function(dt, metric_col, low_threshold,
 #' \describe{
 #'   \item{name}{Short identifier used in the output \code{combination} column.}
 #'   \item{lidar_col}{Name of the LiDAR LAI column in the data.table. This is
-#'     the \emph{response} variable in \code{lm(lidar ~ s2)} — see the
+#'     the \emph{predictor} variable in \code{lm(s2 ~ lidar)} — see the
 #'     regression convention documented in \code{compute_metrics_by_class()}.}
 #'   \item{s2_col}{Name of the Sentinel-2 LAI column in the data.table.
-#'     This is the \emph{predictor} in \code{lm(lidar ~ s2)}.}
+#'     This is the \emph{response} in \code{lm(s2 ~ lidar)}.}
 #' }
 #'
 #' @return A list of three named lists, each with elements
