@@ -1,0 +1,175 @@
+# =============================================================
+# Data and heavy outputs — NEVER version
+# =============================================================
+01_DATA/
+03_RESULTS/
+04_FIGURES/
+paper1_Figures/
+tileS2_kml/
+new_code/
+
+# Sub-project PROSAIL-Optimization is too heavy (52 GB, 163k files)
+PROSAIL-Optimization/
+
+# Obsidian vault
+.obsidian/
+
+# =============================================================
+# Python virtual environments anywhere
+# =============================================================
+green_env/
+**/green_env/
+venv/
+.venv/
+env/
+ENV/
+**/site-packages/
+
+# =============================================================
+# Quarto / Rmarkdown build artifacts
+# =============================================================
+*_files/
+*_cache/
+*.utf8.md
+*.knit.md
+.quarto/
+
+# =============================================================
+# Revision workflow — keep code, ignore heavy intermediates
+# =============================================================
+revision/output/intermediate/
+
+# =============================================================
+# R
+# =============================================================
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+/cache/
+
+# Heavy R binary formats anywhere
+*.rds
+*.qs
+*.parquet
+*.feather
+*.rda
+
+# =============================================================
+# Output / binary files anywhere — keep source only
+# =============================================================
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
+*.gif
+*.html
+*.htm
+*.xlsx
+*.xls
+*.csv
+*.tsv
+
+# =============================================================
+# Geospatial and LiDAR
+# =============================================================
+*.las
+*.laz
+*.tif
+*.tiff
+*.TIF
+*.img
+*.hdr
+*.nc
+*.nc4
+*.h5
+*.hdf5
+*.hdf
+*.grd
+*.gri
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qix
+*.sbn
+*.sbx
+*.geojson
+*.kml
+*.kmz
+*.gpkg
+*.GPKG
+*.ASC
+*.asc
+
+# Sentinel-2 bundles
+*.SAFE/
+L2A_*/
+L1C_*/
+
+# =============================================================
+# Python
+# =============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================================
+# Credentials — CRITICAL
+# =============================================================
+*credentials*.yml
+*credentials*.yaml
+*.pem
+*.key
+.env
+.env.local
+
+# =============================================================
+# OS and editor
+# =============================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# =============================================================
+# Archives
+# =============================================================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+# =============================================================
+# Logs and binaries
+# =============================================================
+*.log
+logs/
+*.exe
+*.dll
+*.dylib
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Reviewer materials — kept local only, not versioned
+revision/reviewers/*.docx
+revision/reviewers/*.pdf
+
+# Reviewer materials kept local only
+revision/reviewers/*.docx
+revision/reviewers/*.pdf
