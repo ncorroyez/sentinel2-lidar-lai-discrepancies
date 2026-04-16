@@ -29,10 +29,11 @@
 #'   \item \strong{RMSE}: Root mean squared error,
 #'     \eqn{\sqrt{\overline{(lidar - s2)^2}}}.
 #'   \item \strong{Bias}: Mean signed difference,
-#'     \eqn{\overline{lidar - s2}}.
+#'     \eqn{\overline{s2 - lidar}}.
+#'     Positive Bias = S2 overestimates LiDAR.
 #'   \item \strong{Bias_pvalue}: Two-sided p-value from a one-sample t-test
-#'     on the pairwise differences, \code{t.test(lidar - s2)$p.value}.
-#'     Tests \eqn{H_0: \mu_{lidar - s2} = 0}.
+#'     on the pairwise differences, \code{t.test(s2 - lidar)$p.value}.
+#'     Tests \eqn{H_0: \mu_{s2 - lidar} = 0}.
 #'   \item \strong{Slope}: Slope \eqn{\hat\beta_1} of \code{lm(s2 ~ lidar)}.
 #'   \item \strong{Slope_pvalue}: Two-sided p-value for
 #'     \eqn{H_0: \beta_1 = 1} (not \eqn{\beta_1 = 0}), computed as
@@ -172,8 +173,9 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
         # ── RMSE ─────────────────────────────────────────────────────────────
         rmse_val <- sqrt(mean((lidar_vec - s2_vec) ^ 2, na.rm = TRUE))
 
-        # ── Bias and Bias_pvalue ──────────────────────────────────────────────
-        diff_vec <- lidar_vec - s2_vec
+        # ── Bias and Bias_pvalue — Harmonized with lm(s2 ~ lidar) convention as of 2026-04-16.
+        # Bias = mean(s2 - lidar): positive = S2 overestimates LiDAR.
+        diff_vec <- s2_vec - lidar_vec
         bias_val <- mean(diff_vec, na.rm = TRUE)
         bias_p   <- if (sum(!is.na(diff_vec)) > 1L) {
           stats::t.test(diff_vec)$p.value
