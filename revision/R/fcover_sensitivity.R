@@ -39,6 +39,11 @@
 #' \code{artifacts_deciduous_only_low_vegetation_majority_90_p_res_10_m.envi})
 #' and generalises to arbitrary \eqn{p} without relaunching the LiDAR pipeline.
 #'
+#' This function tolerates a minor grid misalignment on the deciduous BDForêt
+#' mask (fractional-metre offsets can arise from separate rasterisation
+#' workflows). When detected, the deciduous raster is resampled to the cloud
+#' mask grid using nearest-neighbour interpolation to preserve binary values.
+#'
 #' The four components (all at 10 m resolution, in \code{masks_dir}):
 #' \itemize{
 #'   \item \code{cloud_mask_res_10_m.envi} — cloud/shadow mask derived from S2
@@ -86,6 +91,16 @@ build_fcover_mask <- function(threshold, masks_dir) {
   fcover <- terra::rast(
     file.path(masks_dir, "chm_1_m_thresholded_average_to_res_10_m.envi")
   )
+
+  # Handle minor grid misalignment on the deciduous BDForêt mask
+  # (documented for Aigoual: +20.8 m xmin offset, 2 missing columns).
+  # The 3 other components share the S2-derived grid; the deciduous mask
+  # is produced via a separate BDForêt rasterisation workflow that can
+  # introduce fractional-metre offsets. Nearest-neighbour resampling
+  # preserves binary (0/1) values.
+  if (!isTRUE(terra::compareGeom(decidu, cloud, stopOnError = FALSE))) {
+    decidu <- terra::resample(decidu, cloud, method = "near")
+  }
 
   mask_p             <- cloud * edges * decidu * (fcover > threshold)
   mask_p[mask_p == 0] <- NA
