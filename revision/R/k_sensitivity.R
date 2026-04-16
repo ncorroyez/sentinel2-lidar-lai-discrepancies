@@ -132,8 +132,8 @@ compute_lai_als_at_k <- function(ladstack_path, k_new, k_ref = 0.5) {
 #'   \item Same statistics for LAI_S2_ATBD (constant across \eqn{k} values,
 #'     repeated for output readability).
 #'   \item Comparison metrics: Pearson \eqn{r}, \eqn{r^2}, RMSE, Bias (mean
-#'     signed difference lidar − S2), and the slope of
-#'     \code{lm(lidar ~ s2)} (LAI_ALS as response, LAI_S2_ATBD as predictor).
+#'     signed difference s2 − lidar; positive = S2 overestimates LiDAR), and
+#'     the slope of \code{lm(s2 ~ lidar)} (LAI_S2_ATBD as response, LAI_ALS as predictor).
 #' }
 #'
 #' \strong{Regression convention}: \code{lm(s2 ~ lidar)}, harmonized with
@@ -186,7 +186,8 @@ compute_k_sensitivity_metrics <- function(lai_als_rast, lai_s2_atbd_rast,
   r_val    <- stats::cor(lidar_vec, s2_vec, use = "complete.obs")
   r2_val   <- r_val ^ 2
   rmse_val <- sqrt(mean((lidar_vec - s2_vec) ^ 2))
-  bias_val <- mean(lidar_vec - s2_vec)
+  # Bias = mean(s2 - lidar). Harmonized with lm(s2 ~ lidar) convention as of 2026-04-16.
+  bias_val <- mean(s2_vec - lidar_vec)
 
   # lm(s2 ~ lidar): LAI_S2_ATBD as response, LAI_ALS as predictor.
   # Harmonized with SM5 convention as of 2026-04-15.
