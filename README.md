@@ -58,6 +58,7 @@ Other reviewer comments are addressed in the response letter through methodologi
 ## Conventions
 
 - **Regression convention**: `lm(s2 ~ lidar)` throughout (Sentinel-2 as response, LiDAR as predictor). Slope = 1 tests the 1:1 line.
+- **Bias**: computed as `mean(LAI_S2 - LAI_ALS)`. Positive Bias indicates S2 overestimates relative to ALS.
 - **R²**: computed as Pearson r² (not `summary(lm())$r.squared`), consistent across all modules.
 - **Heterogeneity class thresholds**: dynamically calibrated per variant to maintain ≥ 5 000 pixels per (site × class) pool.
 - **Extinction coefficient k**: fixed at 0.5 (Bouvier et al. 2015 convention for temperate broadleaved forests).
@@ -67,19 +68,29 @@ Other reviewer comments are addressed in the response letter through methodologi
 
 R ≥ 4.3 with: `terra`, `data.table`, `here`, `cli`, `lidR`, `fda`, `stats`. PROSAIL training additionally requires `prosail`, `caret`, `kernlab`. Sentinel-2 download requires credentials for Copernicus Data Space Ecosystem (CDSE).
 
-## Methodological references
+## License
 
-- **Bouvier et al. (2015)** — LAD estimation from airborne LiDAR gap fraction. *Remote Sensing of Environment*, 171, 158-171.
-- **PROSAIL** — Féret et al., Jacquemoud & Baret. Canopy reflectance radiative transfer model.
-- **BDForêt v2** — IGN national forest type map (France), used to mask deciduous-only pixels.
+This work is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html) (GPL-3).
 
 ## Contact
 
-Nathan Corroyez — nathan.corroyez14@gmail.com
+Please don't hesitate to initiate contact with me or one of my supervisors for any questions, remarks, or advice about this work.
 
-## License
+- **nathan.corroyez@inrae.fr** (final-year PhD student)
+- **nathan.corroyez14@gmail.com** (non-academic email address)
+- **sylvie.durrieu@inrae.fr** (director of research)
+- **jean-baptiste.feret@inrae.fr** (co-director of research)
+- **jerome.ogee@inrae.fr** (co-director of research)
 
-To be specified at publication (likely MIT or CC-BY-4.0).
+## Acknowledgments
+
+We would like to thank the CNES agency for the TOSCA Grant N°00007689 along with INRAE's MathNum Department and Agence Nationale de la Recherche via the MaCCMic ANR Project (ANR-21-CE32-0012) for the cofunding of the PhD thesis of Nathan Corroyez, and the IMPRINT ANR Project (ANR-19-CE32-0005) that funded the LiDAR acquisitions of the Mormal, Blois, and Aigoual sites.
+
+## References
+
+- Bouvier, M., Durrieu, S., Fournier, R. A., & Renaud, J. P. (2015). Generalizing relationships between canopy structure and light transmission: the case of European temperate forests for a radiative transfer model parametrization. *Remote Sensing of Environment*, 171, 158–171.
+- Féret, J. B., & de Boissieu, F. (2024). *prosail: PROSAIL leaf and canopy radiative transfer model and inversion routines*. R package version 2.4.1. https://gitlab.com/jbferet/prosail
+- Roussel, J. R., Auty, D., Coops, N. C., Tompalski, P., Goodbody, T. R. H., Sánchez Meador, A., Bourdon, J. F., De Boissieu, F., & Achim, A. (2021). lidR: An R package for analysis of Airborne Laser Scanning (ALS) data. *Remote Sensing of Environment*, 251, 112061. doi:10.1016/j.rse.2020.112061
 
 ## Citation
 
