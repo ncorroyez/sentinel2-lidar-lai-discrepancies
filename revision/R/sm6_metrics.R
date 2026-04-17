@@ -115,8 +115,8 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
   rows   <- vector("list", n_rows)
   idx    <- 0L
 
-  for (site in sites) {
-    dt_site <- dt[dt[["site"]] == site, ]
+  for (site_name in sites) {
+    dt_site <- dt[site == site_name]
 
     for (combo in combinations) {
       lidar_col  <- combo$lidar_col
@@ -150,7 +150,7 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
 
         if (n_obs < 10L) {
           rows[[idx]] <- data.table::data.table(
-            site          = site,
+            site          = site_name,
             metric_source = metric_source,
             combination   = combo_name,
             het_class     = cls,
@@ -199,7 +199,7 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
         }
 
         rows[[idx]] <- data.table::data.table(
-          site          = site,
+          site          = site_name,
           metric_source = metric_source,
           combination   = combo_name,
           het_class     = cls,
