@@ -153,28 +153,28 @@ get_parameter_combinations <- function(parms2test,
 #' @details
 #' This function consolidates the three-step LUT pipeline that appears inline
 #' in \code{PROSAIL_train_sensitivity_subset.R}:
-#' (1) \code{Generate_LUT_PROSAIL()} (renamed \code{Generate_LUT_4SAIL} in
-#' prosail ≥ 3.0), (2) \code{applySensorCharacteristics()},
+#' (1) \code{generate_lut_4sail()} (prosail ≥ 3.0, replaces \code{Generate_LUT_4SAIL}),
+#' (2) \code{apply_sensor_characteristics()},
 #' (3) \code{apply_noise_atbd()}.
 #'
-#' This function calls \code{prosail::Generate_LUT_4SAIL()},
-#' which replaces \code{Generate_LUT_PROSAIL()} in prosail ≥3.0.
-#' The rename is a pure API change without numerical impact:
-#' output LUTs are byte-identical to those produced by the earlier
-#' API when called with matching arguments. The original pipeline
-#' in PROSAIL_train_sensitivity_subset.R (line 151) used the old
-#' name.
+#' Updated for prosail 3.0.0 (2026-04): uses \code{generate_lut_4sail()} with
+#' \code{spec_soil_ossl} (48-spectrum OSSL soil database, replaces 3-spectrum
+#' \code{SpecSOIL}) and \code{spec_atm} (snake_case column names, replaces
+#' \code{SpecATM}). The \code{surface_refl} component of the returned list
+#' is the full coupled BRF that \code{apply_sensor_characteristics()} expects.
+#' Passing \code{SpecATM} (camelCase columns) instead of \code{spec_atm} silently
+#' produces an empty \code{surface_refl} — hence the explicit snake_case argument.
 #'
 #' The function does not write any files; it is called from within
 #' \code{train_one_simulation()}.
 #'
 #' @param input_prosail A \code{data.frame} of PROSAIL input parameters as
-#'   returned by \code{prosail::get_InputPROSAIL()}, one row per LUT sample.
+#'   returned by \code{prosail::get_atbd_v3_lut_input()}, one row per LUT sample.
 #' @param srf           A sensor spectral response function object as returned
-#'   by \code{prosail::GetRadiometry("Sentinel_2")}.
-#' @param bands_to_select Integer vector. Row indices (into the
-#'   band-labelled BRF matrix) corresponding to the bands selected for
-#'   inversion (e.g. \code{match(c("B3","B4","B8"), srf$Spectral_Bands)}).
+#'   by \code{prosail::get_srf_sensor("Sentinel_2")}.
+#' @param bands_to_select Integer vector. Row indices (into the BRF matrix)
+#'   corresponding to the bands selected for inversion
+#'   (e.g. \code{match(c("B3","B4","B8"), srf$Spectral_Bands)}).
 #'
 #' @return A numeric matrix of dimensions \code{length(bands_to_select) ×
 #'   nrow(input_prosail)}: noisy simulated reflectances for the selected bands,
@@ -182,29 +182,27 @@ get_parameter_combinations <- function(parms2test,
 #'
 #' @examples
 #' \dontrun{
-#' srf  <- prosail::GetRadiometry("Sentinel_2")
+#' srf  <- prosail::get_srf_sensor("Sentinel_2")
 #' bsel <- match(c("B3","B4","B8"), srf$Spectral_Bands)
-#' ip   <- prosail::get_InputPROSAIL(atbd = TRUE, nbSamples = 500)
+#' ip   <- prosail::get_atbd_v3_lut_input(nb_samples = 500)
 #' lut  <- build_prosail_lut(ip, srf, bsel)
 #' dim(lut)  # 3 x 500
 #' }
 #'
 #' @export
 build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
-  res <- prosail::Generate_LUT_4SAIL(
-    SAILversion  = "4SAIL",
-    InputPROSAIL = input_prosail,
-    SpecPROSPECT = prospect::SpecPROSPECT_FullRange,
-    SpecSOIL     = prosail::SpecSOIL,
-    SpecATM      = prosail::SpecATM
+  res <- prosail::generate_lut_4sail(
+    input_prosail = input_prosail,
+    spec_prospect = prospect::spec_prospect_full_range,
+    spec_soil     = prosail::spec_soil_ossl,
+    spec_atm      = prosail::spec_atm
   )
-  brf_lut_1nm <- res$BRF
-  brf_lut <- prosail::applySensorCharacteristics(
-    wvl    = prospect::SpecPROSPECT_FullRange$lambda,
-    SRF    = srf,
-    InRefl = brf_lut_1nm
+  brf_lut_1nm <- res$surface_refl
+  brf_lut <- prosail::apply_sensor_characteristics(
+    wvl  = prospect::spec_prospect_full_range$lambda,
+    refl = brf_lut_1nm,
+    srf  = srf
   )
-  rownames(brf_lut) <- srf$Spectral_Bands
   brf_lut_noise <- prosail::apply_noise_atbd(brf_lut)
   brf_lut_noise[bands_to_select, ]
 }
@@ -230,13 +228,17 @@ build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
 #'
 #' The returned list is ready to be passed to \code{saveRDS()} and later
 #' restored via \code{lapply(readRDS(file), liquidSVM::unserialize.liquidSVM)}
-#' for application in \code{prosail::PROSAIL_Hybrid_Apply()}.
+#' for application in \code{prosail::prosail_hybrid_apply()}.
+#'
+#' Updated for prosail 3.0.0 (2026-04): uses \code{prosail_hybrid_train()}
+#' (replaces \code{PROSAIL_Hybrid_Train}) with renamed arguments
+#' \code{refl_lut}/\code{input_variables}/\code{nb_bagg}.
 #'
 #' @param brf_lut_noise Numeric matrix. Noisy LUT reflectances as returned by
 #'   \code{build_prosail_lut()}: dimensions \code{n_bands × n_samples}.
 #' @param input_lai     Numeric vector of length \code{n_samples}. LAI values
 #'   from \code{input_prosail$lai}: the regression target variable.
-#' @param n_samples     Integer. Number of LUT samples (= \code{nrow(InputPROSAIL)}).
+#' @param n_samples     Integer. Number of LUT samples (= \code{nrow(input_prosail)}).
 #'   Controls ensemble size via \code{round(n_samples / 100)}.
 #'
 #' @return A list of \code{round(n_samples / 100)} serialised liquidSVM model
@@ -244,9 +246,9 @@ build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
 #'
 #' @examples
 #' \dontrun{
-#' srf   <- prosail::GetRadiometry("Sentinel_2")
+#' srf   <- prosail::get_srf_sensor("Sentinel_2")
 #' bsel  <- match(c("B3","B4","B8"), srf$Spectral_Bands)
-#' ip    <- prosail::get_InputPROSAIL(atbd = TRUE, nbSamples = 1000)
+#' ip    <- prosail::get_atbd_v3_lut_input(nb_samples = 1000)
 #' lut   <- build_prosail_lut(ip, srf, bsel)
 #' svr   <- train_svr_ensemble(lut, ip$lai, n_samples = 1000)
 #' length(svr)  # 10
@@ -255,10 +257,10 @@ build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
 #' @export
 train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
   nb_models <- round(n_samples / 100)
-  model_svr <- prosail::PROSAIL_Hybrid_Train(
-    BRF_LUT    = brf_lut_noise,
-    InputVar   = input_lai,
-    nbEnsemble = nb_models
+  model_svr <- prosail::prosail_hybrid_train(
+    refl_lut        = brf_lut_noise,
+    input_variables = input_lai,
+    nb_bagg         = nb_models
   )
   lapply(model_svr, liquidSVM::serialize.liquidSVM)
 }
@@ -278,12 +280,18 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #' corresponding element of \code{filename}.
 #'
 #' @details
-#' **ATBD baseline**: \code{prosail::get_InputPROSAIL(atbd = TRUE, ...)} is
-#' called once per \code{train_one_simulation()} call. In sequential mode each
-#' chunk is a single row of the grid, so the baseline is always fresh. In
-#' parallel mode a chunk may contain multiple rows; the overrides accumulate
-#' within a chunk (matching the original \code{PROSAIL_train_sensitivity_subset}
-#' behaviour).
+#' **ATBD v3 baseline**: \code{prosail::get_atbd_v3_lut_input()} (prosail 3.0.0,
+#' replaces \code{get_InputPROSAIL(atbd=TRUE)}) is called once per
+#' \code{train_one_simulation()} call. In sequential mode each chunk is a single
+#' row of the grid, so the baseline is always fresh. In parallel mode a chunk may
+#' contain multiple rows; the overrides accumulate within a chunk (matching the
+#' original \code{PROSAIL_train_sensitivity_subset} behaviour).
+#'
+#' **Parameter name mapping**: \code{simulations$grid_simu} column names follow
+#' legacy camelCase (\code{"LIDFa"}, \code{"LMA"}, \code{"BROWN"}) while the
+#' \code{get_atbd_v3_lut_input()} output uses snake_case (\code{"lidf_a"},
+#' \code{"lma"}, \code{"brown"}). An internal \code{parm_col_map} vector
+#' translates grid names to data.frame column names before overriding.
 #'
 #' **LiDAR LAI sampling**: \code{lidar_lai_rast} and \code{lidar_lai_site_rast}
 #' must be pre-extracted numeric vectors (use \code{terra::values(rast, na.rm=TRUE)}
@@ -296,7 +304,7 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #'
 #' This function is a faithful refactor of
 #' \code{PROSAIL_train_sensitivity_subset()} from
-#' \code{PROSAIL-Optimization/02_CODES/libraries/}.
+#' \code{PROSAIL-Optimization/02_CODES/libraries/}, updated for prosail 3.0.0.
 #'
 #' @param simuset             Data frame. One or more rows from
 #'   \code{simulations$grid_simu}; each column is a parameter and each cell is
@@ -339,7 +347,7 @@ train_one_simulation <- function(simuset, filename, combinations,
                                   nbSamples    = 2000,
                                   p            = NULL,
                                   S2BandSelect = c("B3", "B4", "B8")) {
-  # Reshape geometry of acquisition into GeomAcq list expected by get_InputPROSAIL
+  # Reshape geometry of acquisition into geom_acq list expected by get_atbd_v3_lut_input
   geom_acq <- list(
     min = data.frame(
       tto = geom_s2$MinAngle["vza"],
@@ -353,17 +361,22 @@ train_one_simulation <- function(simuset, filename, combinations,
     )
   )
 
-  # ATBD baseline distribution — shared starting point for all rows in simuset
-  input_prosail <- prosail::get_InputPROSAIL(
-    atbd       = TRUE,
-    nbSamples  = nbSamples,
-    Codist_LAI = FALSE,
-    GeomAcq    = geom_acq
+  # ATBD v3 baseline distribution — shared starting point for all rows in simuset.
+  # Uses get_atbd_v3_lut_input() (prosail 3.0.0) in place of get_InputPROSAIL(atbd=TRUE).
+  # The v3 baseline uses updated parameter priors and spec_soil_ossl (48 OSSL spectra).
+  input_prosail <- prosail::get_atbd_v3_lut_input(
+    nb_samples         = nbSamples,
+    geom_acq           = geom_acq,
+    codistribution_lai = FALSE
   )
 
   # Sensor spectral response and band index — computed once per chunk
-  srf             <- prosail::GetRadiometry("Sentinel_2")
+  srf             <- prosail::get_srf_sensor("Sentinel_2")
   bands_to_select <- match(S2BandSelect, srf$Spectral_Bands)
+
+  # Map from grid parameter names (legacy camelCase from get_combination) to the
+  # snake_case column names used by get_atbd_v3_lut_input() output data.frame.
+  parm_col_map <- c(LIDFa = "lidf_a", lai = "lai", LMA = "lma", BROWN = "brown")
 
   # One SVR model per row of simuset
   for (i in seq_len(nrow(simuset))) {
@@ -371,7 +384,8 @@ train_one_simulation <- function(simuset, filename, combinations,
 
     # Apply per-parameter distribution overrides (non-ATBD only)
     for (parm in names(simuparm)) {
-      valparm <- combinations[[parm]][[as.numeric(simuparm[[parm]])]]
+      valparm  <- combinations[[parm]][[as.numeric(simuparm[[parm]])]]
+      col_name <- parm_col_map[[parm]]
       if (valparm[1] != "ATBD") {
         if (valparm["distribution"] == "uniform") {
           distparm <- stats::runif(
@@ -404,7 +418,7 @@ train_one_simulation <- function(simuset, filename, combinations,
             size = nrow(input_prosail)
           )
         }
-        input_prosail[[parm]] <- distparm
+        input_prosail[[col_name]] <- distparm
       }
     }
 
