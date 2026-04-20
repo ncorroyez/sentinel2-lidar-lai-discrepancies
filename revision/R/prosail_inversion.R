@@ -4,9 +4,12 @@
 #         as part of the PROSAIL hybrid inversion pipeline (SM4).
 #
 #         Two thin wrappers that isolate the liquidSVM deserialisation and the
-#         prosail::PROSAIL_Hybrid_Apply call from the orchestration script.
+#         prosail::prosail_hybrid_apply call from the orchestration script.
 #         They reproduce verbatim the corresponding lines of
 #         Main_s2_03_PROSAIL_Inversion_bis.R (lines 174-179).
+#         Updated for prosail 3.0.0 (2026-04): PROSAIL_Hybrid_Apply →
+#         prosail_hybrid_apply; return fields MeanEstimate/StdEstimate →
+#         mean_estimate/sd_estimate.
 # ---
 
 # ── load_svr_ensemble ──────────────────────────────────────────────────────────
@@ -16,7 +19,7 @@
 #' @description
 #' Reads an RDS file produced by \code{revision/R/prosail_lut.R}
 #' \code{train_all_simulations()} and deserialises each liquidSVM model it
-#' contains, returning a list ready for \code{prosail::PROSAIL_Hybrid_Apply}.
+#' contains, returning a list ready for \code{prosail::prosail_hybrid_apply}.
 #'
 #' @details
 #' This function reproduces verbatim
@@ -36,7 +39,7 @@
 #'
 #' @return A list of deserialised liquidSVM model objects, suitable as the
 #'   \code{RegressionModels} argument of
-#'   \code{prosail::PROSAIL_Hybrid_Apply()}.
+#'   \code{prosail::prosail_hybrid_apply()}.
 #'
 #' @examples
 #' \dontrun{
@@ -56,7 +59,7 @@ load_svr_ensemble <- function(rds_path) {
 #' @title Apply an SVR ensemble to a matrix of Sentinel-2 reflectances
 #'
 #' @description
-#' Thin wrapper around \code{prosail::PROSAIL_Hybrid_Apply}. Takes a
+#' Thin wrapper around \code{prosail::prosail_hybrid_apply}. Takes a
 #' deserialised SVR ensemble (produced by \code{load_svr_ensemble()}) and a
 #' reflectance matrix sub-selected to the training bands, and returns the raw
 #' inversion object containing both the mean LAI estimate and its standard
@@ -66,7 +69,7 @@ load_svr_ensemble <- function(rds_path) {
 #' This function reproduces verbatim
 #' \code{Main_s2_03_PROSAIL_Inversion_bis.R} line 176:
 #' \preformatted{
-#'   LAIest <- PROSAIL_Hybrid_Apply(RegressionModels = modelSVR,
+#'   LAIest <- prosail_hybrid_apply(regression_models = modelSVR,
 #'                                  Refl = Refl[, selbands])
 #' }
 #' The caller is responsible for sub-selecting the reflectance columns to the
@@ -75,8 +78,8 @@ load_svr_ensemble <- function(rds_path) {
 #' filtering internally.
 #'
 #' The raw return value is intentionally preserved (not split into two
-#' vectors) so that the caller can access \code{$MeanEstimate} and
-#' \code{$StdEstimate} explicitly, mirroring the original script.
+#' vectors) so that the caller can access \code{$mean_estimate} and
+#' \code{$sd_estimate} explicitly, mirroring the original script.
 #'
 #' @param svr_ensemble List. A deserialised SVR ensemble as returned by
 #'   \code{load_svr_ensemble()}.
@@ -86,12 +89,12 @@ load_svr_ensemble <- function(rds_path) {
 #'   \code{Refl[, selbands]} where \code{Refl} is the full reflectance table
 #'   read from a \code{S2_reflectance_*.csv} file.
 #'
-#' @return The raw object returned by \code{prosail::PROSAIL_Hybrid_Apply},
+#' @return The raw object returned by \code{prosail::prosail_hybrid_apply},
 #'   a list with at least two components:
 #'   \describe{
-#'     \item{\code{MeanEstimate}}{Numeric vector of length \code{nrow(Refl)}.
+#'     \item{\code{mean_estimate}}{Numeric vector of length \code{nrow(Refl)}.
 #'       Mean LAI estimate across ensemble members (m2/m2).}
-#'     \item{\code{StdEstimate}}{Numeric vector of length \code{nrow(Refl)}.
+#'     \item{\code{sd_estimate}}{Numeric vector of length \code{nrow(Refl)}.
 #'       Standard deviation of LAI estimates across ensemble members.}
 #'   }
 #'
@@ -102,12 +105,12 @@ load_svr_ensemble <- function(rds_path) {
 #'     svr_ensemble       = svr,
 #'     reflectance_matrix = Refl[, selbands]
 #'   )
-#'   lai_mean <- LAIest$MeanEstimate
-#'   lai_sd   <- LAIest$StdEstimate
+#'   lai_mean <- LAIest$mean_estimate
+#'   lai_sd   <- LAIest$sd_estimate
 #' }
 apply_svr_to_reflectance <- function(svr_ensemble, reflectance_matrix) {
-  prosail::PROSAIL_Hybrid_Apply(
-    RegressionModels = svr_ensemble,
-    Refl             = reflectance_matrix
+  prosail::prosail_hybrid_apply(
+    regression_models = svr_ensemble,
+    refl             = reflectance_matrix
   )
 }

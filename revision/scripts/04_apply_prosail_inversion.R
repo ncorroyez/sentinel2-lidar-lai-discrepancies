@@ -106,7 +106,7 @@ for (site in sites) {
       show_col_types = FALSE
     )
 
-    # ii. Band index for PROSAIL_Hybrid_Apply (mirrors _03_bis_ l.158-161)
+    # ii. Band index for prosail_hybrid_apply (mirrors _03_bis_ l.158-161)
     #     Matches S2BandSelect_2 against the column-name prefix
     #     (preprocS2 writes "B03 ..." with extra metadata after the space).
     selbands <- match(
@@ -143,8 +143,8 @@ for (site in sites) {
         svr_ensemble       = modelSVR,
         reflectance_matrix = Refl[, selbands]
       )
-      LAI_Mean[, i] <- LAIest$MeanEstimate
-      LAI_SD[, i]   <- LAIest$StdEstimate
+      LAI_Mean[, i] <- LAIest$mean_estimate
+      LAI_SD[, i]   <- LAIest$sd_estimate
 
       cli::cli_progress_update()
     }
