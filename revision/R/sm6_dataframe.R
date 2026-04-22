@@ -75,13 +75,15 @@ build_pixel_dt <- function(rasters, site_name) {
 #' \code{build_pixel_dt()}, and row-binds the results into a single
 #' \code{data.table}.
 #'
-#' @param sites      Character vector. Site names
+#' @param sites        Character vector. Site names
 #'   (e.g. \code{c("Aigoual", "Blois", "Mormal")}).
-#' @param dopt_value Numeric. Optical depth in metres. Passed to
-#'   \code{load_site_rasters()}. Default \code{4}.
-#' @param sm6a_dir   Character. Root of SM6a output directory.
+#' @param dopt_by_site Named numeric vector or single numeric. Optical depth
+#'   in metres, per site. If a named vector is supplied (names = site names),
+#'   each site uses its own d_opt. If a scalar is supplied, all sites use the
+#'   same value. Default \code{4} (backward-compatible).
+#' @param sm6a_dir     Character. Root of SM6a output directory.
 #'   Typically \code{here::here("revision", "output", "intermediate", "sm6")}.
-#' @param ext_dir    Character. Root of external results directory.
+#' @param ext_dir      Character. Root of external results directory.
 #'   Typically \code{here::here("03_RESULTS")}.
 #'
 #' @return A \code{data.table} with 8 columns (see \code{build_pixel_dt()})
@@ -90,22 +92,23 @@ build_pixel_dt <- function(rasters, site_name) {
 #' @examples
 #' \dontrun{
 #' dt <- build_multisite_dt(
-#'   sites      = c("Aigoual", "Blois", "Mormal"),
-#'   dopt_value = 4,
-#'   sm6a_dir   = here::here("revision", "output", "intermediate", "sm6"),
-#'   ext_dir    = here::here("03_RESULTS")
+#'   sites        = c("Aigoual", "Blois", "Mormal"),
+#'   dopt_by_site = c(Aigoual = 4, Blois = 27, Mormal = 13),
+#'   sm6a_dir     = here::here("revision", "output", "intermediate", "sm6"),
+#'   ext_dir      = here::here("03_RESULTS")
 #' )
 #' dt[, .N, by = site]
 #' }
 #'
 #' @export
-build_multisite_dt <- function(sites, dopt_value = 4, sm6a_dir, ext_dir) {
+build_multisite_dt <- function(sites, dopt_by_site = 4, sm6a_dir, ext_dir) {
   dt_list <- vector("list", length(sites))
   names(dt_list) <- sites
 
   for (site in sites) {
-    cli::cli_alert_info("Loading rasters for site: {site}")
-    r              <- load_site_rasters(site, dopt_value, sm6a_dir, ext_dir)
+    d_val <- if (length(dopt_by_site) == 1L) dopt_by_site else dopt_by_site[[site]]
+    cli::cli_alert_info("Loading rasters for site: {site} (d_opt = {d_val} m)")
+    r               <- load_site_rasters(site, d_val, sm6a_dir, ext_dir)
     dt_list[[site]] <- build_pixel_dt(r, site)
     cli::cli_alert_success("  {site}: {nrow(dt_list[[site]])} pixels loaded")
   }

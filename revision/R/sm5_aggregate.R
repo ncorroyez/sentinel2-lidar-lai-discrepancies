@@ -61,6 +61,8 @@ detect_atbd <- function(colname, n_params) {
 #' @param sampling_method Character. Sampling method (e.g. "stratified_uniform").
 #' @param name_strategy   Character. LUT strategy name.
 #' @param nb_samples      Integer. Number of samples (e.g. 5000).
+#' @param h_min           Integer. Minimum canopy height filter in metres
+#'   (e.g. 10L, 15L, 20L). Used to build h_min-specific filenames.
 #'
 #' @return A named list \code{list(lidar_dt, s2_dt)} of \code{data.table}s,
 #'   or \code{NULL} if either file is absent.
@@ -68,17 +70,20 @@ detect_atbd <- function(colname, n_params) {
 #' @export
 read_sampling_and_estimated <- function(site, norm, depth,
                                          sampling_method, name_strategy,
-                                         nb_samples) {
+                                         nb_samples, h_min = 10L,
+                                         lai_scenario = "per_site") {
   lidar_csv <- here::here(
     "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
     paste0("PAD_", norm, "_Depth_", depth,
            "_Samples_", sampling_method,
+           "_hmin", h_min,
            "_nbSamples_", nb_samples, ".csv")
   )
   s2_csv <- here::here(
     "revision", "output", "intermediate", "PROSAIL_Models",
-    site, name_strategy,
-    paste0("LAI_estimated_", sampling_method,
+    site, name_strategy, lai_scenario,
+    paste0("LAI_estimated_", lai_scenario, "_", sampling_method,
+           "_hmin", h_min,
            "_nbSamples_", nb_samples, ".csv")
   )
 
@@ -121,11 +126,17 @@ read_sampling_and_estimated <- function(site, norm, depth,
 #' @param parms2test      Character vector. Parameter names for ATBD detection.
 #'   Default \code{c("LIDFa", "lai", "LMA", "BROWN")}.
 #' @param nb_samples      Integer. Number of samples. Default \code{5000L}.
+#' @param h_min           Integer. Minimum canopy height filter in metres.
+#'   Default \code{10L}. Added as a column \code{h_min} in the output.
+#' @param lai_scenario    Character. LAI source scenario for SVR training
+#'   (\code{"per_site"}, \code{"common"}, or \code{"fixed_4"}). Default
+#'   \code{"per_site"}. Added as a column \code{lai_scenario} in the output.
 #'
 #' @return A \code{data.table} with columns (in order):
-#'   Site, Norm, Depth, Method, Column, R, R2, RMSE, Bias, Slope, ATBD.
-#'   Types: character / character / integer / character / character /
-#'          numeric × 5 / logical.
+#'   Site, Norm, Depth, Method, h_min, lai_scenario, Column, R, R2, RMSE,
+#'   Bias, Slope, ATBD.
+#'   Types: character / character / integer / character / integer / character /
+#'          character / numeric × 5 / logical.
 #'
 #' @references
 #' Legacy: PROSAIL-Optimization/02_CODES/Sentinel2/Main_s2_04C_analysis_depth.R
@@ -138,7 +149,9 @@ build_metrics_table <- function(
     sampling_methods = "stratified_uniform",
     name_strategy    = "LIDFa_lai_LMA_BROWN",
     parms2test       = c("LIDFa", "lai", "LMA", "BROWN"),
-    nb_samples       = 5000L) {
+    nb_samples       = 5000L,
+    h_min            = 10L,
+    lai_scenario     = "per_site") {
 
   n_params  <- length(parms2test)
   all_rows  <- list()   # accumulate dt chunks; single rbindlist at the end
@@ -153,40 +166,46 @@ build_metrics_table <- function(
         for (sampling_method in sampling_methods) {
 
           dat <- read_sampling_and_estimated(
-            site, norm, depth, sampling_method, name_strategy, nb_samples
+            site, norm, depth, sampling_method, name_strategy, nb_samples,
+            h_min = h_min, lai_scenario = lai_scenario
           )
           if (is.null(dat)) next
 
           lidar_dt <- dat$lidar_dt
           s2_dt    <- dat$s2_dt
 
-          # Row-count guard (mirrors 04C line 91-93)
-          if (nrow(lidar_dt) != nrow(s2_dt)) {
-            stop("SM5: row mismatch — site=", site, " norm=", norm,
-                 " depth=", depth)
+          # Align by samples_id: S2 rows are in GPKG feature order (row index =
+          # implicit samples_id 1..n). Reorder lidar_values to match S2 row order
+          # via match(), making alignment explicit and robust to any CSV reordering.
+          s2_ids         <- seq_len(nrow(s2_dt))
+          lidar_aligned  <- lidar_dt[["lidar_values"]][
+            match(s2_ids, lidar_dt[["samples_id"]])
+          ]
+          if (anyNA(lidar_aligned)) {
+            warning("SM5: unmatched samples_id — site=", site, " norm=", norm,
+                    " depth=", depth, ". Rows with NA lidar dropped.")
           }
 
-          # NOTE: no samples_id alignment here.
-          # Mirrors 04C PART 1 where alignment is commented out (lines 87-89).
-          # Known incohérence vs PART 2 — correction planned for passe 1.5.
-
           chunk <- data.table::rbindlist(lapply(colnames(s2_dt), function(col) {
+            valid <- !is.na(lidar_aligned) & !is.na(s2_dt[[col]])
             m <- compute_metrics_s2_lidar(
-              s2_vals    = s2_dt[[col]],
-              lidar_vals = lidar_dt[["lidar_values"]]
+              s2_vals    = s2_dt[[col]][valid],
+              lidar_vals = lidar_aligned[valid]
             )
             data.table::data.table(
-              Site   = site,
-              Norm   = norm,
-              Depth  = depth,
-              Method = sampling_method,
-              Column = col,
-              R      = round(m$R,     3L),
-              R2     = round(m$R2,    3L),
-              RMSE   = round(m$RMSE,  3L),
-              Bias   = round(m$Bias,  3L),
-              Slope  = round(m$Slope, 3L),
-              ATBD   = detect_atbd(col, n_params)
+              Site         = site,
+              Norm         = norm,
+              Depth        = depth,
+              Method       = sampling_method,
+              h_min        = h_min,
+              lai_scenario = lai_scenario,
+              Column       = col,
+              R            = round(m$R,     3L),
+              R2           = round(m$R2,    3L),
+              RMSE         = round(m$RMSE,  3L),
+              Bias         = round(m$Bias,  3L),
+              Slope        = round(m$Slope, 3L),
+              ATBD         = detect_atbd(col, n_params)
             )
           }))
           all_rows <- c(all_rows, list(chunk))
@@ -207,19 +226,22 @@ build_metrics_table <- function(
 
         for (site in sites) {
           dat <- read_sampling_and_estimated(
-            site, norm, depth, sampling_method, name_strategy, nb_samples
+            site, norm, depth, sampling_method, name_strategy, nb_samples,
+            h_min = h_min, lai_scenario = lai_scenario
           )
           if (is.null(dat)) next
 
           lidar_dt <- dat$lidar_dt
           s2_dt    <- dat$s2_dt
 
-          # Align by samples_id — mirrors 04C PART 2 lines 167-168.
-          # Creates a synthetic samples_id column (row index) in s2_dt that
-          # persists into agg_s2, generating a spurious "samples_id" row in
-          # the metrics output. Reproduced faithfully.
+          # Align by samples_id: assign row-index as samples_id to S2, then
+          # keep only rows present in LiDAR (inner join on samples_id).
           s2_dt[, samples_id := .I]
-          s2_dt <- s2_dt[samples_id %in% lidar_dt[["samples_id"]]]
+          lidar_dt <- lidar_dt[samples_id %in% s2_dt[["samples_id"]]]
+          s2_dt    <- s2_dt[samples_id %in% lidar_dt[["samples_id"]]]
+          # Reorder both tables to identical samples_id order before stacking.
+          data.table::setkey(lidar_dt, samples_id)
+          data.table::setkey(s2_dt,    samples_id)
 
           agg_lidar <- data.table::rbindlist(
             list(agg_lidar, lidar_dt)
@@ -231,7 +253,9 @@ build_metrics_table <- function(
 
         if (nrow(agg_lidar) == 0L) next
 
-        chunk <- data.table::rbindlist(lapply(colnames(agg_s2), function(col) {
+        s2_cols <- setdiff(colnames(agg_s2), "samples_id")
+
+        chunk <- data.table::rbindlist(lapply(s2_cols, function(col) {
           vals_s2 <- agg_s2[[col]]
 
           # Pre-filter complete cases (mirrors 04C PART 2 lines 183-184)
@@ -242,11 +266,13 @@ build_metrics_table <- function(
             lidar_vals = agg_lidar[["lidar_values"]][valid]
           )
           data.table::data.table(
-            Site   = "All_sites",
-            Norm   = norm,
-            Depth  = depth,
-            Method = sampling_method,
-            Column = col,
+            Site         = "All_sites",
+            Norm         = norm,
+            Depth        = depth,
+            Method       = sampling_method,
+            h_min        = h_min,
+            lai_scenario = lai_scenario,
+            Column       = col,
             R      = round(m$R,     3L),
             R2     = round(m$R2,    3L),
             RMSE   = round(m$RMSE,  3L),
@@ -265,8 +291,8 @@ build_metrics_table <- function(
     cli::cli_warn("SM5: no data — all input files missing. Returning empty table.")
     return(data.table::data.table(
       Site = character(), Norm = character(), Depth = integer(),
-      Method = character(), Column = character(),
-      R = numeric(), R2 = numeric(), RMSE = numeric(),
+      Method = character(), h_min = integer(), lai_scenario = character(),
+      Column = character(), R = numeric(), R2 = numeric(), RMSE = numeric(),
       Bias = numeric(), Slope = numeric(), ATBD = logical()
     ))
   }

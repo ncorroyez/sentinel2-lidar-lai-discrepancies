@@ -114,3 +114,72 @@ apply_svr_to_reflectance <- function(svr_ensemble, reflectance_matrix) {
     refl             = reflectance_matrix
   )
 }
+
+# ── predict_lai_full_raster ────────────────────────────────────────────────────
+
+#' @title Apply an SVR ensemble to a full Sentinel-2 reflectance raster
+#'
+#' @description
+#' Loads band-selected layers from a multi-band S2 SpatRaster, scales DN values
+#' to [0, 1], applies \code{prosail_hybrid_apply()} to every non-NA pixel, and
+#' returns a single-layer SpatRaster of mean LAI estimates. Optionally masks the
+#' output with a binary mask raster (1 = keep, NA = exclude).
+#'
+#' Bands are selected by matching layer names against \code{band_prefixes} using
+#' \code{startsWith()}. For the standard S2 preprocS2 output (10 bands at 10 m)
+#' the default \code{c("B03", "B04", "B08")} selects layers 2, 3 and 7.
+#'
+#' @param svr_ensemble     List. Deserialised SVR ensemble from
+#'   \code{load_svr_ensemble()}.
+#' @param s2_raster        SpatRaster. Multi-band S2 reflectance raster in DN
+#'   (values approximately in [0, 10000]).
+#' @param band_prefixes    Character vector. Layer name prefixes to select.
+#'   Default \code{c("B03", "B04", "B08")}.
+#' @param mask_rast        SpatRaster or \code{NULL}. Binary mask (1 = keep).
+#'   Applied after prediction via \code{terra::mask()}. Default \code{NULL}.
+#' @param dn_scale         Numeric. Divisor to convert DN → reflectance [0, 1].
+#'   Default \code{10000}.
+#'
+#' @return A single-layer SpatRaster with mean LAI estimates (m²/m²). NA pixels
+#'   correspond to original NA pixels or masked-out pixels.
+#'
+#' @export
+predict_lai_full_raster <- function(svr_ensemble, s2_raster,
+                                    band_prefixes = c("B03", "B04", "B08"),
+                                    mask_rast = NULL,
+                                    dn_scale  = 10000) {
+  # Select bands by prefix
+  band_idx <- which(Reduce(`|`, lapply(band_prefixes, startsWith, x = names(s2_raster))))
+  if (length(band_idx) != length(band_prefixes)) {
+    stop(
+      "predict_lai_full_raster: expected ", length(band_prefixes),
+      " bands matching prefixes c(", paste(band_prefixes, collapse = ", "),
+      "), found ", length(band_idx), ".\n",
+      "Available layer names: ", paste(names(s2_raster), collapse = ", ")
+    )
+  }
+  s2_sel <- s2_raster[[band_idx]]
+
+  # Extract all pixel values: matrix (npix × nbands)
+  vals      <- terra::values(s2_sel) / dn_scale
+  valid     <- stats::complete.cases(vals)
+
+  preds        <- rep(NA_real_, nrow(vals))
+  if (any(valid)) {
+    result       <- prosail::prosail_hybrid_apply(
+      regression_models = svr_ensemble,
+      refl              = as.matrix(vals[valid, , drop = FALSE])
+    )
+    preds[valid] <- result$mean_estimate
+  }
+
+  # Write predictions back into a single-layer raster template
+  out_rast        <- s2_raster[[1L]]
+  names(out_rast) <- "lai_s2_opt"
+  terra::values(out_rast) <- preds
+
+  if (!is.null(mask_rast)) {
+    out_rast <- terra::mask(out_rast, mask_rast)
+  }
+  out_rast
+}

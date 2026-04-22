@@ -175,7 +175,8 @@ align_and_remove_na_for_aoi <- function(aoi_path, S2_path, lidar_lai_path,
 stratified_sampling_uniform <- function(site,
                                          lidar_lai_path,
                                          max_path,
-                                         nbSamples) {
+                                         nbSamples,
+                                         h_min = 10L) {
   # Open raster
   mraster_r <- terra::rast(lidar_lai_path)
   mraster   <- sum(mraster_r, na.rm = TRUE)
@@ -185,9 +186,9 @@ stratified_sampling_uniform <- function(site,
   combined_stack        <- c(mraster, max_rast)
   names(combined_stack) <- c("lidar_lai", "max_height")
 
-  # Convert to data frame & filter where max > 10 and max <= 40
+  # Filter: max_height >= h_min (dmin in the paper) and <= 40 m
   data_df     <- as.data.frame(combined_stack, xy = TRUE, na.rm = TRUE)
-  filtered_df <- dplyr::filter(data_df, max_height > 10 & max_height <= 40)
+  filtered_df <- dplyr::filter(data_df, max_height >= h_min & max_height <= 40)
 
   # Define breaks within the 5th-95th percentile range
   lai_5th  <- 2
@@ -396,7 +397,8 @@ stratified_sampling <- function(mean_path, lskew_path, field_points_path,
 get_s2_samples <- function(aoi_path, S2_path, mean_path,
                             lskew_path, lidar_lai_path, max_path,
                             field_points_path,
-                            nbSamples, site, method = 'random') {
+                            nbSamples, site, method = 'random',
+                            h_min = 10L) {
 
   # read vector and raster
   aoi_init <- terra::vect(aoi_path)
@@ -430,7 +432,8 @@ get_s2_samples <- function(aoi_path, S2_path, mean_path,
     samples <- stratified_sampling_uniform(site           = site,
                                             lidar_lai_path = lidar_lai_path,
                                             max_path       = max_path,
-                                            nbSamples      = nbSamples)
+                                            nbSamples      = nbSamples,
+                                            h_min          = h_min)
   } else {
     stop("Error: method should be either 'random', 'stratified' or 'stratified_uniform.")
   }

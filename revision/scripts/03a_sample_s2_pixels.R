@@ -38,6 +38,7 @@ l2a_ids <- c(
 name_vect        <- "utm_init.shp"
 nbSamples        <- 5000
 Samplingmethods  <- c("stratified_uniform")
+h_min_values     <- c(10L, 15L, 20L)   # dmin values (m); paper section 2.5.4
 
 # ── Processing loop ────────────────────────────────────────────────────────────
 
@@ -49,10 +50,10 @@ for (site in sites) {
   aoi_path          <- here::here("01_DATA", site, "Geo_Files", name_vect)
   S2_path           <- here::here("03_RESULTS", site, "PROSAIL_Optimization",
                                    l2a, "Reflectance", paste0(l2a, "_Refl"))
-  lidar_lai_path    <- here::here("01_DATA", site, "LiDAR",
-                                   "PAD_Profiles_Classic", "ladstack.tif")
+  lidar_dir         <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+  lidar_lai_path    <- file.path(lidar_dir, "PAD_Profiles_Classic", "ladstack.tif")
   mean_path         <- here::here("01_DATA", site, "LiDAR", "mean_res_10_m.tif")
-  max_path          <- here::here("01_DATA", site, "LiDAR", "max_res_10_m.tif")
+  max_path          <- file.path(lidar_dir, "max_res_10_m.tif")
   lskew_path        <- here::here("01_DATA", site, "LiDAR", "lskew_res_10_m.tif")
   field_points_path <- here::here("01_DATA", site, "Geo_Files",
                                    "data_utm31n.geojson")
@@ -73,40 +74,45 @@ for (site in sites) {
     save           = TRUE
   )
 
-  # Step 2 — sample and extract S2 reflectances
+  # Step 2 — sample and extract S2 reflectances for each h_min
   for (Samplingmethod in Samplingmethods) {
+    for (h_min in h_min_values) {
 
-    set.seed(42)   # location preserved from Main_s2_02A_extract.R (line 64)
+      set.seed(42)
 
-    S2Refl <- get_s2_samples(
-      aoi_path          = aoi_sampling_path,
-      S2_path           = S2_path,
-      mean_path         = mean_path,
-      lskew_path        = lskew_path,
-      lidar_lai_path    = lidar_lai_path,
-      max_path          = max_path,
-      field_points_path = field_points_path,
-      nbSamples         = nbSamples,
-      site              = site,
-      method            = Samplingmethod
-    )
+      S2Refl <- get_s2_samples(
+        aoi_path          = aoi_sampling_path,
+        S2_path           = S2_path,
+        mean_path         = mean_path,
+        lskew_path        = lskew_path,
+        lidar_lai_path    = lidar_lai_path,
+        max_path          = max_path,
+        field_points_path = field_points_path,
+        nbSamples         = nbSamples,
+        site              = site,
+        method            = Samplingmethod,
+        h_min             = h_min
+      )
 
-    # Save sample locations (GeoPackage) with sample_id
-    filename_sampling <- here::here(out_sampling,
-                                     paste0("Sampling_", Samplingmethod,
-                                            "_nbSamples_", nbSamples, ".GPKG"))
-    sample_locations <- S2Refl$sample_location
-    sample_locations$sample_id <- seq_len(nrow(sample_locations))
-    terra::writeVector(x        = sample_locations,
-                        filename = filename_sampling,
-                        filetype = "GPKG",
-                        overwrite = TRUE)
+      # Save sample locations (GeoPackage) with sample_id
+      filename_sampling <- here::here(out_sampling,
+                                       paste0("Sampling_", Samplingmethod,
+                                              "_hmin", h_min,
+                                              "_nbSamples_", nbSamples, ".GPKG"))
+      sample_locations <- S2Refl$sample_location
+      sample_locations$sample_id <- seq_len(nrow(sample_locations))
+      terra::writeVector(x        = sample_locations,
+                          filename = filename_sampling,
+                          filetype = "GPKG",
+                          overwrite = TRUE)
 
-    # Save S2 reflectances (TSV CSV)
-    filename_refl <- here::here(out_sampling,
-                                 paste0("S2_reflectance_", Samplingmethod,
-                                        "_nbSamples_", nbSamples, ".csv"))
-    s2_refl <- S2Refl$S2_refl
-    readr::write_delim(x = s2_refl, file = filename_refl, delim = "\t")
+      # Save S2 reflectances (TSV CSV)
+      filename_refl <- here::here(out_sampling,
+                                   paste0("S2_reflectance_", Samplingmethod,
+                                          "_hmin", h_min,
+                                          "_nbSamples_", nbSamples, ".csv"))
+      s2_refl <- S2Refl$S2_refl
+      readr::write_delim(x = s2_refl, file = filename_refl, delim = "\t")
+    }
   }
 }

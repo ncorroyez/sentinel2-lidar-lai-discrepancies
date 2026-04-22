@@ -53,9 +53,29 @@ source(here::here("revision", "R", "sm6_metrics.R"))
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites          <- c("Aigoual", "Blois", "Mormal")
-dopt_value     <- 4          # d_opt in metres; see pad_filename() for convention
-canopy_max_m   <- 40         # fixed canopy height ceiling used in PAD naming
+norm_ref       <- "DSM_keepTrees"   # norm used for d_opt and LAI_S2_opt selection
+canopy_max_m   <- 40                # fixed canopy height ceiling used in PAD naming
 metric_sources <- c("DSM", "CHM")
+
+# ── Site-specific d_opt from SM5 passe 2 (prosail_opt.csv) ────────────────────
+prosail_opt_csv <- here::here(
+  "revision", "output", "intermediate", "sm5", "prosail_opt.csv"
+)
+if (file.exists(prosail_opt_csv)) {
+  prosail_opt <- data.table::fread(prosail_opt_csv)
+  opt_ref     <- prosail_opt[Norm == norm_ref & Site %in% sites]
+  dopt_by_site <- setNames(opt_ref$d_opt, opt_ref$Site)
+  cli::cli_alert_info(
+    "d_opt loaded from prosail_opt.csv (norm = {norm_ref}): ",
+    paste(names(dopt_by_site), dopt_by_site, sep = "=", collapse = ", ")
+  )
+} else {
+  dopt_by_site <- setNames(rep(4L, length(sites)), sites)
+  cli::cli_warn(
+    "prosail_opt.csv not found — using fallback d_opt = 4 for all sites. ",
+    "Run script 06b first."
+  )
+}
 
 # downsample_n: max pixels per (site x combination x class) group.
 # NULL  → use all pixels (default, recommended for the refactored pipeline).
@@ -70,12 +90,11 @@ out_dir  <- here::here("revision", "output", "intermediate", "sm6")
 
 # ── Pre-flight: verify all required input files ─────────────────────────────────
 
-pad_fn   <- pad_filename(dopt_value, canopy_max_m)
-dec_only <- file.path("03_RESULTS", "{site}", "Metrics", "Deciduous_Only")
-
 required_files <- list()
 
 for (site in sites) {
+  d_val     <- dopt_by_site[[site]]
+  pad_fn    <- pad_filename(d_val, canopy_max_m)
   base_ext  <- file.path(ext_dir, site, "Metrics", "Deciduous_Only")
   base_sm6a <- file.path(sm6a_dir, site)
 
@@ -96,21 +115,28 @@ for (site in sites) {
   )
   required_files[[paste0(site, "_pad")]] <- list(
     path     = file.path(base_ext, "PAD_Profiles_dsm_keepTrees", pad_fn),
-    producer = "produced by 2.calculate_25m_metrics.R (PAD pipeline)"
+    producer = paste0("produced by 2.calculate_25m_metrics.R (d_opt=", d_val, ")")
   )
   required_files[[paste0(site, "_max")]] <- list(
     path     = file.path(base_ext, "max_res_10_m.tif"),
     producer = "produced by 2.calculate_25m_metrics.R"
   )
 
-  # S2 rasters (produced by 3_train_predict_prosail.R)
+  # S2 ATBD raster (legacy, always required)
   required_files[[paste0(site, "_s2_atbd")]] <- list(
     path     = file.path(base_ext, "s2lai_summer_atbd_res_10_m.tif"),
     producer = "produced by 3_train_predict_prosail.R"
   )
+
+  # S2 opt raster: SM5 passe 3 preferred, legacy fallback tolerated
+  opt_path    <- file.path(base_sm6a, "s2lai_summer_opt_res_10_m.tif")
+  legacy_path <- file.path(base_ext, "s2lai_summer_best_indiv_res_10_m.tif")
   required_files[[paste0(site, "_s2_opt")]] <- list(
-    path     = file.path(base_ext, "s2lai_summer_best_indiv_res_10_m.tif"),
-    producer = "produced by 3_train_predict_prosail.R"
+    path     = if (file.exists(opt_path)) opt_path else legacy_path,
+    producer = if (file.exists(opt_path))
+      "produced by SM5 passe 3 (06c_sm5_predict_lai_raster.R)"
+    else
+      "produced by 3_train_predict_prosail.R (legacy fallback)"
   )
 }
 
@@ -148,10 +174,10 @@ if (!dir.exists(out_dir)) {
 cli::cli_h2("Building multi-site pixel data.table")
 
 dt_full <- build_multisite_dt(
-  sites      = sites,
-  dopt_value = dopt_value,
-  sm6a_dir   = sm6a_dir,
-  ext_dir    = ext_dir
+  sites        = sites,
+  dopt_by_site = dopt_by_site,
+  sm6a_dir     = sm6a_dir,
+  ext_dir      = ext_dir
 )
 
 cli::cli_alert_info(

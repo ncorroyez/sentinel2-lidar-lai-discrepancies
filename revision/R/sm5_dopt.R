@@ -162,6 +162,10 @@ select_dopt_single <- function(metrics_subset, method) {
     idx <- which.min(abs(metrics_subset[["Bias"]]))
     if (length(idx) > 0L) d_opt <- depths[idx]
 
+  } else if (method == "slope") {
+    idx <- which.min(abs(metrics_subset[["Slope"]] - 1))
+    if (length(idx) > 0L) d_opt <- depths[idx]
+
   } else if (method == "pareto") {
     pf    <- compute_pareto_front(metrics_subset)
     d_opt <- pf$d_opt
@@ -202,6 +206,188 @@ select_dopt_single <- function(metrics_subset, method) {
     dist_utopia  = dist_utopia,
     pareto_front = pareto_front
   )
+}
+
+# ── select_prosail_opt ────────────────────────────────────────────────────────
+
+#' @title Select optimal PROSAIL configuration at the reference d_opt
+#'
+#' @description
+#' Two-stage selection for SM5 passe 2, run under two d_opt modes:
+#' \describe{
+#'   \item{\code{"per_site"}}{Each individual site uses its own d_opt from
+#'     \code{dopt_dt}. The Pareto selection over PROSAIL columns is performed
+#'     on the metrics of that site at its own optimal depth.}
+#'   \item{\code{"all_sites"}}{The d_opt from the \code{"All_sites"} row of
+#'     \code{dopt_dt} is fixed and applied identically to each individual site.
+#'     The Pareto selection is then performed on per-site metrics at that
+#'     common depth, not on the aggregated All_sites data.}
+#' }
+#' Both modes are always computed and returned in a single table distinguished
+#' by the \code{d_opt_source} column. \code{compute_pareto_front()} is reused
+#' with PROSAIL columns playing the role of "depths" in criterion space.
+#'
+#' @param metrics_dt    \code{data.table} from \code{build_metrics_table()}
+#'   (SM5 passe 1). Must contain Site, Norm, Depth, Column, R2, RMSE, Bias,
+#'   Slope. The "All_sites" rows are used only to supply pooled metrics; the
+#'   Pareto selection always runs on individual-site rows.
+#' @param dopt_dt       \code{data.table} from \code{dopt_reference.csv}
+#'   (ATBD only). Must contain Site, Norm, method_dopt, d_opt. Must include
+#'   both individual-site rows and a row with \code{Site == "All_sites"} for
+#'   the \code{"all_sites"} mode.
+#' @param dopt_method   Character scalar. Which \code{method_dopt} to use for
+#'   fixing depth. Default \code{"pareto"}.
+#' @param norm_filter   Character scalar passed to \code{grepl()} to subset
+#'   Norm values. Default \code{"keepTrees"}. Set to \code{NULL} for all norms.
+#' @param individual_sites Character vector. Sites to process individually.
+#'   Default \code{c("Aigoual", "Blois", "Mormal")}.
+#' @param fixed_d_opt   Integer or \code{NULL}. If provided, adds a third mode
+#'   \code{"fixed"} where all sites use this depth (e.g. \code{4L} for the
+#'   submitted-paper reference). Pareto selection runs on each site's individual
+#'   metrics at that fixed depth. Default \code{NULL} (mode omitted).
+#'
+#' @return A \code{data.table} with one row per (Site × Norm × d_opt_source):
+#' \describe{
+#'   \item{d_opt_source}{character — \code{"per_site"} or \code{"all_sites"}}
+#'   \item{Site, Norm}{character}
+#'   \item{d_opt}{integer — depth used (site-specific or All_sites value)}
+#'   \item{method_dopt}{character}
+#'   \item{Column_opt}{character — best PROSAIL column at d_opt}
+#'   \item{ATBD}{logical}
+#'   \item{R, R2, RMSE, Bias, Slope}{numeric — metrics at d_opt for Column_opt}
+#'   \item{dist_utopia}{numeric — Pareto distance for Column_opt}
+#'   \item{n_pareto_front}{integer — number of non-dominated columns}
+#' }
+#'
+#' @references
+#' R3.minor.13, R4.spec.2: multi-criteria PROSAIL configuration selection.
+#'
+#' @export
+select_prosail_opt <- function(metrics_dt,
+                                dopt_dt,
+                                dopt_method      = "pareto",
+                                norm_filter      = "keepTrees",
+                                individual_sites = c("Aigoual", "Blois", "Mormal"),
+                                fixed_d_opt      = NULL) {
+
+  # ── Apply norm filter ────────────────────────────────────────────────────────
+  if (!is.null(norm_filter) && nzchar(norm_filter)) {
+    metrics_dt <- metrics_dt[grepl(norm_filter, Norm)]
+    dopt_dt    <- dopt_dt[grepl(norm_filter, Norm)]
+  }
+
+  dopt_ref <- dopt_dt[method_dopt == dopt_method, .(Site, Norm, d_opt)]
+
+  if (nrow(dopt_ref) == 0L) {
+    cli::cli_abort(
+      "select_prosail_opt: no rows in dopt_dt with method_dopt == {.val {dopt_method}}."
+    )
+  }
+
+  # ── Internal helper: Pareto over PROSAIL columns for one (site, norm, depth) ─
+  pareto_over_columns <- function(site, norm, d_val, source_label) {
+    sub <- metrics_dt[Site == site & Norm == norm & Depth == d_val]
+    if (nrow(sub) == 0L) {
+      cli::cli_warn(
+        "select_prosail_opt: no rows for Site={site} Norm={norm} Depth={d_val} ",
+        "[{source_label}] — skipped."
+      )
+      return(NULL)
+    }
+
+    sub_pf <- data.table::copy(sub)
+    sub_pf[, tmp_depth := .I]
+
+    pf <- compute_pareto_front(data.table::data.table(
+      Depth = sub_pf[["tmp_depth"]],
+      R2    = sub_pf[["R2"]],
+      RMSE  = sub_pf[["RMSE"]],
+      Bias  = sub_pf[["Bias"]],
+      Slope = sub_pf[["Slope"]]
+    ))
+
+    if (is.na(pf$d_opt)) {
+      cli::cli_warn(
+        "select_prosail_opt: Pareto returned NA for Site={site} Norm={norm} ",
+        "[{source_label}] — skipped."
+      )
+      return(NULL)
+    }
+
+    best_row <- sub_pf[tmp_depth == pf$d_opt]
+    n_pf     <- if (anyNA(pf$pareto_front_depths)) NA_integer_ else
+                  length(pf$pareto_front_depths)
+
+    data.table::data.table(
+      d_opt_source  = source_label,
+      Site          = site,
+      Norm          = norm,
+      d_opt         = d_val,
+      method_dopt   = dopt_method,
+      Column_opt    = best_row[["Column"]],
+      ATBD          = best_row[["ATBD"]],
+      R             = best_row[["R"]],
+      R2            = best_row[["R2"]],
+      RMSE          = best_row[["RMSE"]],
+      Bias          = best_row[["Bias"]],
+      Slope         = best_row[["Slope"]],
+      dist_utopia   = pf$dist_min,
+      n_pareto_front = n_pf
+    )
+  }
+
+  results <- list()
+
+  # ── Mode 1: per_site — each site uses its own d_opt ─────────────────────────
+  cli::cli_alert_info("select_prosail_opt: mode = per_site")
+  site_dopt <- dopt_ref[Site %in% individual_sites]
+  for (i in seq_len(nrow(site_dopt))) {
+    row  <- site_dopt[i]
+    res  <- pareto_over_columns(row$Site, row$Norm, row$d_opt, "per_site")
+    if (!is.null(res)) results <- c(results, list(res))
+  }
+
+  # ── Mode 2: all_sites — All_sites d_opt applied to each individual site ─────
+  cli::cli_alert_info("select_prosail_opt: mode = all_sites")
+  norms_available <- unique(dopt_ref[Site == "All_sites", Norm])
+  for (norm in norms_available) {
+    d_all <- dopt_ref[Site == "All_sites" & Norm == norm, d_opt]
+    if (length(d_all) == 0L || is.na(d_all)) next
+    for (site in individual_sites) {
+      res <- pareto_over_columns(site, norm, d_all, "all_sites")
+      if (!is.null(res)) results <- c(results, list(res))
+    }
+  }
+
+  # ── Mode 3: fixed — user-supplied depth applied to each individual site ────────
+  if (!is.null(fixed_d_opt)) {
+    cli::cli_alert_info(
+      "select_prosail_opt: mode = fixed (d_opt = {fixed_d_opt})"
+    )
+    norms_available <- unique(metrics_dt[grepl(
+      if (!is.null(norm_filter) && nzchar(norm_filter)) norm_filter else ".",
+      Norm), Norm])
+    for (norm in norms_available) {
+      for (site in individual_sites) {
+        res <- pareto_over_columns(site, norm, fixed_d_opt,
+                                   paste0("fixed_", fixed_d_opt))
+        if (!is.null(res)) results <- c(results, list(res))
+      }
+    }
+  }
+
+  if (length(results) == 0L) {
+    cli::cli_warn("select_prosail_opt: no results — returning empty table.")
+    return(data.table::data.table(
+      d_opt_source = character(), Site = character(), Norm = character(),
+      d_opt = integer(), method_dopt = character(), Column_opt = character(),
+      ATBD = logical(), R = numeric(), R2 = numeric(), RMSE = numeric(),
+      Bias = numeric(), Slope = numeric(),
+      dist_utopia = numeric(), n_pareto_front = integer()
+    ))
+  }
+
+  data.table::rbindlist(results, use.names = TRUE)
 }
 
 # ── select_dopt ───────────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ source(here::here("revision", "R", "sentinel2_sampling.R"))
 sites            <- c("Aigoual", "Blois", "Mormal")
 nbSamplesS2Refl  <- 5000
 Samplingmethod   <- "stratified_uniform"
+h_min_values     <- c(10L, 15L, 20L)   # must match 03a
 
 # PAD normalisation types and their sub-directories under
 # 01_DATA/{site}/LiDAR/testPADs/
@@ -50,10 +51,13 @@ for (site in sites) {
 
   cat("Processing site:", site, "\n")
 
+  for (h_min in h_min_values) {
+
   # Sample locations GPKG produced by 03a
   filename_sampling <- here::here(
     "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
     paste0("Sampling_", Samplingmethod,
+           "_hmin", h_min,
            "_nbSamples_", nbSamplesS2Refl, ".GPKG")
   )
 
@@ -62,8 +66,8 @@ for (site in sites) {
 
   for (norm_name in names(norm_types)) {
 
-    pad_dir <- here::here("01_DATA", site, "LiDAR", "testPADs",
-                           norm_types[[norm_name]])
+    pad_dir <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR",
+                           "testPADs", norm_types[[norm_name]])
 
     # List all single-depth PAD rasters (pattern: PAD_X.5_40.tif)
     pad_files <- list.files(pad_dir,
@@ -82,6 +86,7 @@ for (site in sites) {
         out_sampling,
         paste0("PAD_", norm_name, "_Depth_", depth,
                "_Samples_", Samplingmethod,
+               "_hmin", h_min,
                "_nbSamples_", nbSamplesS2Refl, ".csv")
       )
 
@@ -92,6 +97,8 @@ for (site in sites) {
       )
     }
   }
+
+  }  # end h_min loop
 }
 
 cat("Done. CSVs written to 03_RESULTS/{site}/PROSAIL_Optimization/sampling/\n")

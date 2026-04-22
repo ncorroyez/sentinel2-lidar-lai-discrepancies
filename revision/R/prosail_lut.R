@@ -79,6 +79,55 @@
 #' nrow(simulations$grid_simu)  # 270
 #' }
 #'
+# ── sample_lai_stratified_uniform ─────────────────────────────────────────────
+
+#' @title Stratified uniform sampling of LiDAR LAI values for SVR training
+#'
+#' @description
+#' Draws \code{n_samples} values from a vector of LiDAR-derived LAI values
+#' using a stratified uniform strategy: the range [\code{lai_min},
+#' \code{quantile(x, q_max)}] is divided into 1 m²/m² bins, and an equal
+#' number of observations is drawn from each bin (with replacement when a bin
+#' has fewer observations than required). This avoids over-representing the
+#' modal LAI class in the SVR training set and ensures the model is exposed to
+#' the full range of observed LAI values.
+#'
+#' @param x Numeric vector. LAI values (already masked: all values >= lai_min).
+#' @param n_samples Integer. Total number of samples to draw. Default 5000.
+#' @param lai_min Numeric. Lower bound of the sampling range (default 2).
+#' @param q_max Numeric in (0,1). Quantile used as upper bound (default 0.95).
+#'
+#' @return Numeric vector of length \code{n_samples}.
+#'
+#' @examples
+#' \dontrun{
+#'   lai_vals <- terra::values(lidar_lai_rast, na.rm = TRUE)
+#'   pool <- sample_lai_stratified_uniform(lai_vals, n_samples = 5000)
+#' }
+#' @export
+sample_lai_stratified_uniform <- function(x, n_samples = 5000,
+                                          lai_min = 2, q_max = 0.98) {
+  lai_max  <- quantile(x, q_max, na.rm = TRUE)
+  breaks   <- seq(lai_min, ceiling(lai_max), by = 1)
+  n_bins   <- length(breaks) - 1
+  per_bin  <- floor(n_samples / n_bins)
+  extra    <- n_samples - per_bin * n_bins   # distribute remainder to first bins
+
+  out <- vector("numeric", n_samples)
+  idx <- 1L
+  for (b in seq_len(n_bins)) {
+    lo   <- breaks[b]
+    hi   <- breaks[b + 1]
+    pool <- x[x >= lo & x < hi]
+    k    <- per_bin + (b <= extra)
+    if (length(pool) == 0L) pool <- x  # fallback: draw from full range
+    out[idx:(idx + k - 1L)] <- sample(pool, size = k, replace = length(pool) < k)
+    idx  <- idx + k
+  }
+  out
+}
+
+
 #' @export
 get_parameter_combinations <- function(parms2test,
                                         output_dir,
@@ -344,7 +393,7 @@ train_one_simulation <- function(simuset, filename, combinations,
                                   lidar_lai_common_rast,
                                   lidar_lai_3m_rast,
                                   geom_s2,
-                                  nbSamples    = 2000,
+                                  nbSamples    = 5000,
                                   p            = NULL,
                                   S2BandSelect = c("B3", "B4", "B8")) {
   # Reshape geometry of acquisition into geom_acq list expected by get_atbd_v3_lut_input
@@ -513,7 +562,7 @@ train_all_simulations <- function(simulations,
                                    lidar_lai_site_rast   = NULL,
                                    lidar_lai_common_rast = NULL,
                                    lidar_lai_3m_rast     = NULL,
-                                   nbSamples             = 2000,
+                                   nbSamples             = 5000,
                                    filename,
                                    nbCPU                 = 1,
                                    S2BandSelect          = c("B3", "B4", "B8")) {

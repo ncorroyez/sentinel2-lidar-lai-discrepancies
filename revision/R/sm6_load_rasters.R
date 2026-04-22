@@ -90,14 +90,23 @@ pad_filename <- function(dopt_value, canopy_max_m = 40) {
 #' @param site       Character. Site name, one of
 #'   \code{c("Aigoual", "Blois", "Mormal")}.
 #' @param dopt_value Numeric. Optical depth in metres, used to derive the PAD
-#'   filename via \code{pad_filename()}. Default \code{4} (value reported in
-#'   the submitted manuscript for the combined configuration).
+#'   filename via \code{pad_filename()}. For the revision pipeline, read
+#'   from \code{prosail_opt.csv} (script 06b) to get the site-specific value.
+#'   Default \code{4} kept for backward compatibility.
 #' @param sm6a_dir   Character. Root directory of SM6a outputs (the directory
 #'   that contains \code{{site}/dsm_sd_res_10_m.tif} and its CHM counterpart).
 #'   Typically \code{here::here("revision", "output", "intermediate", "sm6")}.
+#'   Also used to locate \code{s2lai_summer_opt_res_10_m.tif} (SM5 passe 3
+#'   output, script 06c) when \code{lai_s2_opt_path} is \code{NULL}.
 #' @param ext_dir    Character. Root of the external results directory.
 #'   Typically \code{here::here("03_RESULTS")}. The function looks for rasters
 #'   under \code{ext_dir/{site}/Metrics/Deciduous_Only/}.
+#' @param lai_s2_opt_path Character or \code{NULL}. Explicit path to the
+#'   LAI_S2_opt raster. If \code{NULL} (default), looks for
+#'   \code{sm6a_dir/{site}/s2lai_summer_opt_res_10_m.tif} (SM5 passe 3).
+#'   If that file does not exist, falls back to the legacy
+#'   \code{s2lai_summer_best_indiv_res_10_m.tif} in
+#'   \code{ext_dir/{site}/Metrics/Deciduous_Only/} with a warning.
 #'
 #' @return A named list of seven \code{SpatRaster} objects:
 #'   \code{lai_als}, \code{lai_als_dopt}, \code{lai_s2_atbd},
@@ -123,7 +132,8 @@ pad_filename <- function(dopt_value, canopy_max_m = 40) {
 #' }
 #'
 #' @export
-load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir) {
+load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir,
+                              lai_s2_opt_path = NULL) {
   dec_only <- file.path(ext_dir, site, "Metrics", "Deciduous_Only")
 
   # ── ladstack: multi-layer → sum to get LAI_ALS ──────────────────────────────
@@ -147,9 +157,20 @@ load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir) {
   lai_s2_atbd <- terra::rast(
     file.path(dec_only, "s2lai_summer_atbd_res_10_m.tif")
   )
-  lai_s2_opt <- terra::rast(
-    file.path(dec_only, "s2lai_summer_best_indiv_res_10_m.tif")
-  )
+  # lai_s2_opt: SM5 passe 3 output preferred; fallback to legacy if absent.
+  if (is.null(lai_s2_opt_path)) {
+    lai_s2_opt_path <- file.path(sm6a_dir, site, "s2lai_summer_opt_res_10_m.tif")
+  }
+  if (!file.exists(lai_s2_opt_path)) {
+    legacy_path <- file.path(dec_only, "s2lai_summer_best_indiv_res_10_m.tif")
+    warning(
+      "load_site_rasters: SM5 passe 3 raster not found for site '", site, "':\n  ",
+      lai_s2_opt_path,
+      "\nFalling back to legacy: ", legacy_path
+    )
+    lai_s2_opt_path <- legacy_path
+  }
+  lai_s2_opt <- terra::rast(lai_s2_opt_path)
 
   # ── SM6a heterogeneity rasters ───────────────────────────────────────────────
   sm6a_site <- file.path(sm6a_dir, site)
