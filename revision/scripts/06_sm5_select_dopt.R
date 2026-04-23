@@ -67,6 +67,21 @@ dopt_all <- select_dopt(
   prosail_filter = "all"
 )
 
+# No max_depth constraint — d_opt free to go up to 38 m
+dopt_reference_free <- select_dopt(
+  metrics_dt,
+  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth      = NULL,
+  prosail_filter = "ATBD"
+)
+
+dopt_all_free <- select_dopt(
+  metrics_dt,
+  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth      = NULL,
+  prosail_filter = "all"
+)
+
 elapsed <- round((proc.time() - t0)[["elapsed"]], 1)
 
 # ── Write CSV ──────────────────────────────────────────────────────────────────
@@ -84,28 +99,30 @@ cli::cli_bullets(c(
   "i" = "Durée : {elapsed} s"
 ))
 
-# Wide table: d_opt by (Site × Norm) × method_dopt for the ATBD reference.
-# With the standard "LIDFa_lai_LMA_BROWN" LUT there is exactly one ATBD column,
-# so aggregation below is stable (fun.aggregate takes first value if >1).
-# d_opt per method
-wide_dopt <- data.table::dcast(
-  dopt_reference,
-  Site + Norm ~ method_dopt,
-  value.var     = "d_opt",
-  fun.aggregate = function(x) x[[1L]]
-)
+make_wide <- function(dopt_dt) {
+  data.table::dcast(
+    dopt_dt,
+    Site + Norm ~ method_dopt,
+    value.var     = "d_opt",
+    fun.aggregate = function(x) x[[1L]]
+  )
+}
 
-# Slope at pareto d_opt
-wide_slope <- data.table::dcast(
-  dopt_reference[method_dopt == "slope"],
-  Site + Norm ~ method_dopt,
-  value.var     = "Slope",
-  fun.aggregate = function(x) round(x[[1L]], 3)
-)
-data.table::setnames(wide_slope, "slope", "Slope_at_dopt")
+w_constrained <- make_wide(dopt_reference)
+w_free        <- make_wide(dopt_reference_free)
 
-wide <- wide_dopt
+cli::cli_h2("1. d_opt par Norm — max_depth = {h_min_select} m (ATBD)")
+data.table::setorder(w_constrained, Norm, Site)
+print(w_constrained)
 
-cli::cli_h2("d_opt par Site × Norm — méthodes comparées (ATBD)")
-data.table::setorder(wide, Norm, Site)
-print(wide)
+cli::cli_h2("2. d_opt par Site — max_depth = {h_min_select} m (ATBD)")
+data.table::setorder(w_constrained, Site, Norm)
+print(w_constrained)
+
+cli::cli_h2("3. d_opt par Norm — sans contrainte de profondeur (ATBD)")
+data.table::setorder(w_free, Norm, Site)
+print(w_free)
+
+cli::cli_h2("4. d_opt par Site — sans contrainte de profondeur (ATBD)")
+data.table::setorder(w_free, Site, Norm)
+print(w_free)
