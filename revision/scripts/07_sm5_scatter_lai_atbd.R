@@ -40,7 +40,7 @@ cli::cli_h1("Loading raster data (all pixels)...")
 
 load_raster_pairs <- function(site) {
   meta <- site_meta[[site]]
-  base <- here::here("03_RESULTS", site, "Metrics", "Not_Masked")
+  base <- here::here("03_RESULTS", site, "Metrics", "Deciduous_Only")
 
   als_path <- file.path(base, "lidarlai_res_10_m.tif")
   s2_path  <- file.path(base,
@@ -88,7 +88,7 @@ stats_dt <- dt[, {
   list(
     a     = a,
     b     = b,
-    b_str = if (b >= 0) paste0("+", b) else as.character(b),
+    b_str = if (b >= 0) paste0(" + ", b) else paste0(" - ", abs(b)),
     r     = round(m$R,    2),
     R2    = round(m$R2,   2),
     RMSE  = round(m$RMSE, 2),
@@ -100,8 +100,6 @@ cli::cli_h2("Metrics")
 print(stats_dt)
 
 # ── Count colour scale ─────────────────────────────────────────────────────────
-
-count_breaks <- c(0, 100, 200, 300)
 
 # ── Panel builders ─────────────────────────────────────────────────────────────
 
@@ -157,18 +155,17 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
   st       <- stats_dt[Site == site_name]
   n_obs    <- format(nrow(site_dt), big.mark = ",")
 
-  # Annotation lines y positions (top-left, 3 lines, ~1.3 units apart)
+  # Annotation y positions: top-right, 3 lines, ~1.3 units apart
+  x_ann <- 14.6
   y_top <- 14.65
   dy    <- 1.30
 
-  # Line 2 label with italic r (parse = TRUE)
-  lbl_r <- paste0(
-    "italic(r)~'= ", st$r, "   R2 = ", st$R2, "'"
-  )
+  # Line 2: italic(r) and R^2 via plotmath (parse = TRUE)
+  lbl_r <- paste0("italic(r)~'= ", st$r, "'~~R^2~'= ", st$R2, "'")
 
   p <- ggplot2::ggplot(site_dt,
                         ggplot2::aes(x = LAI_S2, y = LAI_ALS)) +
-    ggplot2::geom_bin2d(binwidth = 0.3) +
+    ggplot2::geom_bin2d(bins = 400) +
     ggplot2::geom_smooth(method = "lm", formula = y ~ x,
                           se = FALSE, colour = "firebrick",
                           linewidth = 0.85) +
@@ -177,11 +174,7 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
                           linewidth = 0.5) +
     ggplot2::scale_fill_viridis_c(
       name   = "Count",
-      limits = c(0, 300),
-      breaks = count_breaks,
-      labels = count_breaks,
       option = "viridis",
-      oob    = scales::squish,
       guide  = if (show_legend)
                  ggplot2::guide_colourbar(
                    barheight      = ggplot2::unit(3.5, "cm"),
@@ -193,27 +186,27 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
     ggplot2::coord_equal(xlim = xy_lim, ylim = xy_lim, expand = FALSE) +
     ggplot2::scale_x_continuous(breaks = c(0, 5, 10, 15)) +
     ggplot2::scale_y_continuous(breaks = c(0, 5, 10, 15)) +
-    # Line 1: equation
+    # Line 1: equation (top-right, right-aligned)
     ggplot2::annotate("text",
-      x = 0.4, y = y_top,
-      label  = paste0("y = ", st$a, "x ", st$b_str),
-      hjust = 0, vjust = 1, size = 3.0, colour = "black"
+      x = x_ann, y = y_top,
+      label  = paste0("y = ", st$a, "x", st$b_str),
+      hjust = 1, vjust = 1, size = 3.0, colour = "black"
     ) +
-    # Line 2: italic r and R2
+    # Line 2: italic r and R² (superscript via parse)
     ggplot2::annotate("text",
-      x = 0.4, y = y_top - dy,
-      label  = lbl_r,
-      hjust = 0, vjust = 1, size = 3.0, colour = "black",
+      x = x_ann, y = y_top - dy,
+      label = lbl_r,
+      hjust = 1, vjust = 1, size = 3.0, colour = "black",
       parse = TRUE
     ) +
     # Line 3: RMSE and Bias
     ggplot2::annotate("text",
-      x = 0.4, y = y_top - 2 * dy,
+      x = x_ann, y = y_top - 2 * dy,
       label  = paste0("RMSE = ", st$RMSE, "   Bias = ", st$Bias),
-      hjust = 0, vjust = 1, size = 3.0, colour = "black"
+      hjust = 1, vjust = 1, size = 3.0, colour = "black"
     ) +
     ggplot2::annotate("text",
-      x = 14.7, y = 0.3,
+      x = 14.6, y = 0.3,
       label  = paste0("n = ", n_obs),
       hjust  = 1, vjust = 0,
       size   = 2.8, colour = "black"
