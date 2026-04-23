@@ -155,13 +155,11 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
   st       <- stats_dt[Site == site_name]
   n_obs    <- format(nrow(site_dt), big.mark = ",")
 
-  # Annotation y positions: top-right, 3 lines, ~1.3 units apart
+  # Annotation: top-right, one metric per line
   x_ann <- 14.6
   y_top <- 14.65
-  dy    <- 1.30
-
-  # Line 2: italic(r) and R^2 via plotmath (parse = TRUE)
-  lbl_r <- paste0("italic(r)~'= ", st$r, "'~~R^2~'= ", st$R2, "'")
+  dy    <- 0.95          # tight inter-line spacing
+  sz    <- 3.8           # text size
 
   p <- ggplot2::ggplot(site_dt,
                         ggplot2::aes(x = LAI_S2, y = LAI_ALS)) +
@@ -186,30 +184,37 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
     ggplot2::coord_equal(xlim = xy_lim, ylim = xy_lim, expand = FALSE) +
     ggplot2::scale_x_continuous(breaks = c(0, 5, 10, 15)) +
     ggplot2::scale_y_continuous(breaks = c(0, 5, 10, 15)) +
-    # Line 1: equation (top-right, right-aligned)
     ggplot2::annotate("text",
       x = x_ann, y = y_top,
-      label  = paste0("y = ", st$a, "x", st$b_str),
-      hjust = 1, vjust = 1, size = 3.0, colour = "black"
+      label = paste0("y = ", st$a, "x", st$b_str),
+      hjust = 1, vjust = 1, size = sz, colour = "black"
     ) +
-    # Line 2: italic r and R² (superscript via parse)
     ggplot2::annotate("text",
       x = x_ann, y = y_top - dy,
-      label = lbl_r,
-      hjust = 1, vjust = 1, size = 3.0, colour = "black",
+      label = paste0("italic(r)~'= ", st$r, "'"),
+      hjust = 1, vjust = 1, size = sz, colour = "black",
       parse = TRUE
     ) +
-    # Line 3: RMSE and Bias
     ggplot2::annotate("text",
       x = x_ann, y = y_top - 2 * dy,
-      label  = paste0("RMSE = ", st$RMSE, "   Bias = ", st$Bias),
-      hjust = 1, vjust = 1, size = 3.0, colour = "black"
+      label = paste0("R^2~'= ", st$R2, "'"),
+      hjust = 1, vjust = 1, size = sz, colour = "black",
+      parse = TRUE
+    ) +
+    ggplot2::annotate("text",
+      x = x_ann, y = y_top - 3 * dy,
+      label = paste0("RMSE = ", st$RMSE),
+      hjust = 1, vjust = 1, size = sz, colour = "black"
+    ) +
+    ggplot2::annotate("text",
+      x = x_ann, y = y_top - 4 * dy,
+      label = paste0("Bias = ", st$Bias),
+      hjust = 1, vjust = 1, size = sz, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = 14.6, y = 0.3,
-      label  = paste0("n = ", n_obs),
-      hjust  = 1, vjust = 0,
-      size   = 2.8, colour = "black"
+      label = paste0("n = ", n_obs),
+      hjust = 1, vjust = 0, size = 3.2, colour = "black"
     ) +
     ggplot2::labs(
       title = site_name,
@@ -248,8 +253,8 @@ out_dir  <- here::here("revision", "output", "figures", "sm5")
 if (!dir.exists(out_dir))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-out_file <- file.path(out_dir, "scatter_LAI_ALS_vs_S2_ATBD.pdf")
+out_file <- file.path(out_dir, "scatter_LAI_ALS_vs_S2_ATBD.png")
 ggplot2::ggsave(out_file, fig, width = 30, height = 12, units = "cm",
-                 device = "pdf")
+                 device = "png", dpi = 300)
 cli::cli_alert_success("Written: {out_file}")
 cat("Done.\n")
