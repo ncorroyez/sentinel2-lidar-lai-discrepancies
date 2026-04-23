@@ -199,7 +199,7 @@ for (k_val in k_values) {
   if (nrow(sub) == 0L) next
   d <- select_dopt(sub, methods = "pareto", max_depth = h_min_pixel,
                    prosail_filter = "ATBD")
-  d[method_dopt == "pareto"][, k := k_val]
+  d[method_dopt == "pareto", k := k_val]
   dopt_k_rows <- c(dopt_k_rows, list(d[method_dopt == "pareto"]))
 }
 dopt_k <- data.table::rbindlist(dopt_k_rows, use.names = TRUE, fill = TRUE)
