@@ -272,20 +272,19 @@ dt10       <- dt[h_min == h_min_10]
 arrow_dt10 <- arrow_dt[h_min == h_min_10]
 hline_dt10 <- hline_dt[h_min == h_min_10]
 
-p_R_10 <- make_metric_figure(
+p_pareto_10 <- make_metric_figure(
   plot_dt     = dt10,
-  yvar        = "R",
-  ylab        = "Pearson r",
+  yvar        = "dist_utopia",
+  ylab        = "Pareto distance to utopia",
   show_legend = TRUE,
   arrow_dt    = arrow_dt10,
-  hline_dt    = hline_dt10,
   base_size   = 14,
   row_facet   = "."
 )
 
-out_r10 <- file.path(out_dir, "dopt_R_ATBD_hmin10.pdf")
-ggplot2::ggsave(out_r10, p_R_10, width = 24, height = 12, units = "cm")
-cat("  Written:", out_r10, "\n")
+out_pareto10 <- file.path(out_dir, "dopt_Pareto_ATBD_hmin10.pdf")
+ggplot2::ggsave(out_pareto10, p_pareto_10, width = 24, height = 12, units = "cm")
+cat("  Written:", out_pareto10, "\n")
 
 # ── Multi-metric exploratory figures ─────────────────────────────────────────
 
