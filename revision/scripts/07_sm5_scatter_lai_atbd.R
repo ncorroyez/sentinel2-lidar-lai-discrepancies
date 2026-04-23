@@ -85,22 +85,23 @@ stats_dt <- dt[, {
   fit <- stats::lm(LAI_ALS ~ LAI_S2)
   a   <- round(stats::coef(fit)[[2L]], 2)
   b   <- round(stats::coef(fit)[[1L]], 2)
-  b_str <- if (b >= 0) paste0("+", b) else as.character(b)
   list(
-    label = paste0(
-      "y = ", a, "x ", b_str, "\n",
-      "r = ",   round(m$R,    2), "   R2 = ", round(m$R2,   2), "\n",
-      "RMSE = ", round(m$RMSE, 2), "   Bias = ",   round(m$Bias,  2)
-    )
+    a     = a,
+    b     = b,
+    b_str = if (b >= 0) paste0("+", b) else as.character(b),
+    r     = round(m$R,    2),
+    R2    = round(m$R2,   2),
+    RMSE  = round(m$RMSE, 2),
+    Bias  = round(m$Bias, 2)
   )
 }, by = Site]
 
 cli::cli_h2("Metrics")
-print(stats_dt[, .(Site, label)])
+print(stats_dt)
 
 # ── Count colour scale ─────────────────────────────────────────────────────────
 
-count_breaks <- c(1, 10, 100, 1000, 10000)
+count_breaks <- c(0, 100, 200, 300)
 
 # ── Panel builders ─────────────────────────────────────────────────────────────
 
@@ -108,12 +109,12 @@ make_hist_inset <- function(site_name) {
   site_dt <- dt[Site == site_name]
 
   long_dt <- data.table::rbindlist(list(
-    data.table::data.table(val = site_dt$LAI_S2,  var = "LAI[S2]"),
+    data.table::data.table(val = site_dt$LAI_S2,  var = "LAI[S2_ATBD]"),
     data.table::data.table(val = site_dt$LAI_ALS, var = "LAI[ALS]")
   ))
-  long_dt[, var := factor(var, levels = c("LAI[S2]", "LAI[ALS]"))]
+  long_dt[, var := factor(var, levels = c("LAI[S2_ATBD]", "LAI[ALS]"))]
 
-  var_colours <- c("LAI[S2]" = "#444444", "LAI[ALS]" = "#2166ac")
+  var_colours <- c("LAI[S2_ATBD]" = "#444444", "LAI[ALS]" = "#2166ac")
 
   ggplot2::ggplot(long_dt, ggplot2::aes(x = val, fill = var)) +
     ggplot2::geom_histogram(
@@ -153,8 +154,17 @@ make_hist_inset <- function(site_name) {
 
 make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
   site_dt  <- dt[Site == site_name]
-  lbl      <- stats_dt[Site == site_name, label]
+  st       <- stats_dt[Site == site_name]
   n_obs    <- format(nrow(site_dt), big.mark = ",")
+
+  # Annotation lines y positions (top-left, 3 lines, ~1.3 units apart)
+  y_top <- 14.65
+  dy    <- 1.30
+
+  # Line 2 label with italic r (parse = TRUE)
+  lbl_r <- paste0(
+    "italic(r)~'= ", st$r, "   R2 = ", st$R2, "'"
+  )
 
   p <- ggplot2::ggplot(site_dt,
                         ggplot2::aes(x = LAI_S2, y = LAI_ALS)) +
@@ -167,10 +177,11 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
                           linewidth = 0.5) +
     ggplot2::scale_fill_viridis_c(
       name   = "Count",
-      trans  = "log10",
+      limits = c(0, 300),
       breaks = count_breaks,
-      labels = scales::comma(count_breaks),
+      labels = count_breaks,
       option = "viridis",
+      oob    = scales::squish,
       guide  = if (show_legend)
                  ggplot2::guide_colourbar(
                    barheight      = ggplot2::unit(3.5, "cm"),
@@ -182,11 +193,24 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
     ggplot2::coord_equal(xlim = xy_lim, ylim = xy_lim, expand = FALSE) +
     ggplot2::scale_x_continuous(breaks = c(0, 5, 10, 15)) +
     ggplot2::scale_y_continuous(breaks = c(0, 5, 10, 15)) +
+    # Line 1: equation
     ggplot2::annotate("text",
-      x = 0.4, y = 14.7,
-      label  = lbl, hjust = 0, vjust = 1,
-      size   = 3.0, colour = "black",
-      family = "mono", lineheight = 1.05
+      x = 0.4, y = y_top,
+      label  = paste0("y = ", st$a, "x ", st$b_str),
+      hjust = 0, vjust = 1, size = 3.0, colour = "black"
+    ) +
+    # Line 2: italic r and R2
+    ggplot2::annotate("text",
+      x = 0.4, y = y_top - dy,
+      label  = lbl_r,
+      hjust = 0, vjust = 1, size = 3.0, colour = "black",
+      parse = TRUE
+    ) +
+    # Line 3: RMSE and Bias
+    ggplot2::annotate("text",
+      x = 0.4, y = y_top - 2 * dy,
+      label  = paste0("RMSE = ", st$RMSE, "   Bias = ", st$Bias),
+      hjust = 0, vjust = 1, size = 3.0, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = 14.7, y = 0.3,
@@ -196,8 +220,8 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
     ) +
     ggplot2::labs(
       title = site_name,
-      x     = expression(LAI[S2]~"(ATBD)"),
-      y     = if (show_y) expression(LAI[ALS]~"(DTM)") else NULL
+      x     = expression(LAI[S2_ATBD]),
+      y     = if (show_y) expression(LAI[ALS]) else NULL
     ) +
     ggplot2::theme_bw(base_size = 13) +
     ggplot2::theme(
