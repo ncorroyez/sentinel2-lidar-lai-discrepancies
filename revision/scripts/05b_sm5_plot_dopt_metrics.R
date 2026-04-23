@@ -40,6 +40,9 @@ norm_linetypes <- c(DSM_keepTrees = "solid",  DTM_keepTrees = "dashed")
 
 hmin_levels <- paste0("h_min = ", h_min_values, " m")
 
+# h_min = 10 only figure
+h_min_10 <- 10L
+
 # ── Load and prepare data ──────────────────────────────────────────────────────
 
 atbd_csv <- here::here(
@@ -83,7 +86,7 @@ dt      <- merge(dt, dist_dt, by = c("Site", "Norm", "Depth", "h_min"))
 # ── Pareto d_opt per (Site × Norm × h_min) ────────────────────────────────────
 # Computed here so arrows can be drawn at the chosen d_opt.
 
-cli::cli_alert_info("Computing Pareto d_opt for each h_min…")
+cli::cli_alert_info("Computing Pareto d_opt for each h_min...")
 dopt_by_hmin <- data.table::rbindlist(lapply(h_min_values, function(hm) {
   sub <- dt[h_min == hm]
   d   <- select_dopt(sub, methods = "pareto", max_depth = hm,
@@ -132,7 +135,12 @@ hline_dt[, Site := factor(Site, levels = sites)]
 
 make_metric_figure <- function(plot_dt, yvar, ylab,
                                 ylim = NULL, show_legend = FALSE,
-                                arrow_dt = NULL) {
+                                arrow_dt = NULL,
+                                base_size = 13,
+                                row_facet = "h_min_label") {
+
+  # geom_rect shade data: derive from distinct h_min values in plot_dt
+  shade_df <- unique(plot_dt[, .(h_min_label, h_min_val = h_min)])
 
   p <- ggplot2::ggplot(
     plot_dt,
@@ -140,26 +148,25 @@ make_metric_figure <- function(plot_dt, yvar, ylab,
                  colour = Norm, linetype = Norm)
   ) +
     ggplot2::geom_rect(
-      data = data.table::data.table(
-        h_min_label = factor(hmin_levels, levels = hmin_levels),
-        h_min_val   = h_min_values
-      ),
+      data = shade_df,
       ggplot2::aes(xmin = h_min_val, xmax = Inf, ymin = -Inf, ymax = Inf),
       inherit.aes = FALSE,
       fill = "grey85", alpha = 0.5
     ) +
-    ggplot2::geom_line(linewidth = 0.7, na.rm = TRUE) +
+    ggplot2::geom_line(linewidth = 0.8, na.rm = TRUE) +
     ggplot2::scale_colour_manual(values = norm_colours, labels = norm_labels) +
     ggplot2::scale_linetype_manual(values = norm_linetypes, labels = norm_labels) +
     ggplot2::scale_x_continuous(breaks = c(1, seq(5, 38, by = 5))) +
     ggplot2::labs(x = "Depth from canopy top (m)", y = ylab,
                   colour = NULL, linetype = NULL) +
-    ggplot2::facet_grid(h_min_label ~ Site) +
-    ggplot2::theme_bw(base_size = 10) +
+    ggplot2::facet_grid(stats::as.formula(paste(row_facet, "~ Site"))) +
+    ggplot2::theme_bw(base_size = base_size) +
     ggplot2::theme(
-      legend.position  = if (show_legend) "bottom" else "none",
-      panel.grid.minor = ggplot2::element_blank(),
-      strip.background = ggplot2::element_rect(fill = "grey92")
+      legend.position      = if (show_legend) "bottom" else "none",
+      panel.grid.minor     = ggplot2::element_blank(),
+      strip.background     = ggplot2::element_rect(fill = "grey92"),
+      strip.text.x         = ggplot2::element_text(face = "bold"),
+      strip.text.y         = ggplot2::element_text(face = "bold")
     )
 
   if (!is.null(ylim))
@@ -168,7 +175,7 @@ make_metric_figure <- function(plot_dt, yvar, ylab,
   # Downward arrows at d_opt per norm — same colour as the respective curve
   if (!is.null(arrow_dt) && nrow(arrow_dt) > 0 && yvar %in% names(arrow_dt)) {
     y_range <- range(plot_dt[[yvar]], na.rm = TRUE)
-    offset  <- diff(y_range) * 0.08
+    offset  <- diff(y_range) * 0.13
 
     for (norm_i in norms_select) {
       sub_a <- data.table::copy(arrow_dt[Norm == norm_i])
@@ -180,8 +187,8 @@ make_metric_figure <- function(plot_dt, yvar, ylab,
         ggplot2::aes(x = d_opt, xend = d_opt,
                      y = y_start, yend = y_end),
         colour    = norm_colours[[norm_i]],
-        linewidth = 0.6,
-        arrow     = ggplot2::arrow(length = ggplot2::unit(0.18, "cm"),
+        linewidth = 0.9,
+        arrow     = ggplot2::arrow(length = ggplot2::unit(0.35, "cm"),
                                    type = "closed"),
         inherit.aes = FALSE
       )
@@ -199,7 +206,21 @@ if (!dir.exists(out_dir))
 
 # ── Figure 5 — R only, with reference lines and arrows ───────────────────────
 
-cat("Plotting R figure (Fig. 5 style)…\n")
+cat("Plotting R figure (Fig. 5 style, all h_min)...\n")
+
+add_r_hlines <- function(p, hline_data) {
+  p +
+    ggplot2::geom_hline(
+      data      = hline_data,
+      ggplot2::aes(yintercept = r_all),
+      linetype  = "dashed", colour = "grey20", linewidth = 0.5
+    ) +
+    ggplot2::geom_hline(
+      data      = hline_data,
+      ggplot2::aes(yintercept = r_uniform),
+      linetype  = "dotted", colour = "grey20", linewidth = 0.5
+    )
+}
 
 p_R_fig <- make_metric_figure(
   plot_dt     = dt,
@@ -207,38 +228,61 @@ p_R_fig <- make_metric_figure(
   ylab        = "Pearson r",
   show_legend = TRUE,
   arrow_dt    = arrow_dt
-) +
-  ggplot2::geom_hline(
-    data        = hline_dt,
-    ggplot2::aes(yintercept = r_all),
-    linetype    = "dashed",
-    colour      = "grey20",
-    linewidth   = 0.5
-  ) +
-  ggplot2::geom_hline(
-    data        = hline_dt,
-    ggplot2::aes(yintercept = r_uniform),
-    linetype    = "dotted",
-    colour      = "grey20",
-    linewidth   = 0.5
-  ) +
+)
+p_R_fig <- add_r_hlines(p_R_fig, hline_dt) +
   ggplot2::labs(
-    title    = "Pearson r — LAI_S2 (ATBD) vs LAI_ALS, by depth (ATBD)",
+    title    = "Pearson r - LAI_S2 (ATBD) vs LAI_ALS, by depth",
     subtitle = paste(
-      "Gray: redundancy zone | Arrows: Pareto d_opt per norm",
-      "| dashed: r_all (full canopy, depth=38)",
-      "| dotted: r_uniform (LAI at h_min boundary)"
+      "Gray: redundancy zone | Arrows: Pareto d_opt",
+      "| dashed: r_all (depth=38) | dotted: r_uniform (depth=h_min)"
     )
   ) +
   ggplot2::theme(
-    plot.title    = ggplot2::element_text(size = 11, face = "bold"),
-    plot.subtitle = ggplot2::element_text(size = 7,  colour = "grey40"),
+    plot.title    = ggplot2::element_text(size = 13, face = "bold"),
+    plot.subtitle = ggplot2::element_text(size = 8,  colour = "grey40"),
     legend.position = "bottom"
   )
 
 out_r <- file.path(out_dir, "dopt_R_ATBD.pdf")
 ggplot2::ggsave(out_r, p_R_fig, width = 28, height = 18, units = "cm")
 cat("  Written:", out_r, "\n")
+
+# ── Figure 5 variant — h_min = 10 m only ──────────────────────────────────────
+
+cat("Plotting R figure (h_min = 10 m only)...\n")
+
+dt10       <- dt[h_min == h_min_10]
+arrow_dt10 <- arrow_dt[h_min == h_min_10]
+hline_dt10 <- hline_dt[h_min == h_min_10]
+
+p_R_10 <- make_metric_figure(
+  plot_dt     = dt10,
+  yvar        = "R",
+  ylab        = "Pearson r",
+  show_legend = TRUE,
+  arrow_dt    = arrow_dt10,
+  base_size   = 14,
+  row_facet   = "."
+)
+p_R_10 <- add_r_hlines(p_R_10, hline_dt10) +
+  ggplot2::labs(
+    title    = "Pearson r - LAI_S2 (ATBD) vs LAI_ALS (h_min = 10 m)",
+    subtitle = paste(
+      "Gray: redundancy zone | Arrows: Pareto d_opt",
+      "| dashed: r_all (depth=38) | dotted: r_uniform (depth=10)"
+    ),
+    x = "Depth from canopy top (m)",
+    y = "Pearson r"
+  ) +
+  ggplot2::theme(
+    plot.title    = ggplot2::element_text(size = 14, face = "bold"),
+    plot.subtitle = ggplot2::element_text(size = 9,  colour = "grey40"),
+    legend.position = "bottom"
+  )
+
+out_r10 <- file.path(out_dir, "dopt_R_ATBD_hmin10.pdf")
+ggplot2::ggsave(out_r10, p_R_10, width = 24, height = 12, units = "cm")
+cat("  Written:", out_r10, "\n")
 
 # ── Multi-metric exploratory figures ─────────────────────────────────────────
 
@@ -260,12 +304,12 @@ for (spec in metrics_spec) {
     arrow_dt    = arrow_dt
   ) +
     ggplot2::labs(
-      title    = paste0("d_opt metric — ", spec$ylab, " (ATBD)"),
+      title    = paste0("d_opt metric - ", spec$ylab, " (ATBD)"),
       subtitle = "Gray zone: depth > h_min (redundancy zone) | Arrows: Pareto d_opt"
     ) +
     ggplot2::theme(
-      plot.title    = ggplot2::element_text(size = 11, face = "bold"),
-      plot.subtitle = ggplot2::element_text(size = 7,  colour = "grey40"),
+      plot.title    = ggplot2::element_text(size = 13, face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 8,  colour = "grey40"),
       legend.position = "bottom"
     )
   out_file <- file.path(out_dir, paste0("dopt_metric_", spec$file, "_ATBD.pdf"))
