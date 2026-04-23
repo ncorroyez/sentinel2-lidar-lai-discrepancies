@@ -131,18 +131,18 @@ make_hist_inset <- function(site_name) {
       expand = ggplot2::expansion(mult = c(0, 0.08))
     ) +
     ggplot2::labs(x = NULL, y = NULL) +
-    ggplot2::theme_bw(base_size = 8) +
+    ggplot2::theme_bw(base_size = 11) +
     ggplot2::theme(
       legend.position      = c(0.97, 0.97),
       legend.justification = c(1, 1),
-      legend.key.height    = ggplot2::unit(0.28, "cm"),
-      legend.key.width     = ggplot2::unit(0.40, "cm"),
-      legend.text          = ggplot2::element_text(size = 6.5),
+      legend.key.height    = ggplot2::unit(0.35, "cm"),
+      legend.key.width     = ggplot2::unit(0.50, "cm"),
+      legend.text          = ggplot2::element_text(size = 9),
       legend.background    = ggplot2::element_rect(fill = "white",
                                                     colour = NA),
-      legend.margin        = ggplot2::margin(1, 2, 1, 2),
+      legend.margin        = ggplot2::margin(2, 3, 2, 3),
       panel.grid           = ggplot2::element_blank(),
-      axis.text            = ggplot2::element_text(size = 6),
+      axis.text            = ggplot2::element_text(size = 8.5),
       axis.ticks           = ggplot2::element_line(linewidth = 0.3),
       plot.background      = ggplot2::element_rect(fill = "white",
                                                     colour = "grey60",
@@ -150,7 +150,8 @@ make_hist_inset <- function(site_name) {
     )
 }
 
-make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
+make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
+                          show_legend = FALSE) {
   site_dt  <- dt[Site == site_name]
   st       <- stats_dt[Site == site_name]
   n_obs    <- format(nrow(site_dt), big.mark = ",")
@@ -218,7 +219,7 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
     ) +
     ggplot2::labs(
       title = site_name,
-      x     = expression(LAI[S2_ATBD]),
+      x     = if (show_x) expression(LAI[S2_ATBD]) else NULL,
       y     = if (show_y) expression(LAI[ALS]) else NULL
     ) +
     ggplot2::theme_bw(base_size = 13) +
@@ -226,14 +227,16 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
       legend.position  = if (show_legend) "right" else "none",
       panel.grid.minor = ggplot2::element_blank(),
       plot.title       = ggplot2::element_text(face = "bold", hjust = 0.5),
+      axis.title.x     = if (!show_x) ggplot2::element_blank() else
+                           ggplot2::element_text(),
       axis.title.y     = if (!show_y) ggplot2::element_blank() else
                            ggplot2::element_text()
     )
 
-  # Inset histogram: bottom-right (55-100% x, 0-40% y of panel area)
+  # Inset histogram: bottom-right (55-100% x, 0-48% y of panel area)
   h <- make_hist_inset(site_name)
-  p + patchwork::inset_element(h, left = 0.55, right = 1.0,
-                                 bottom = 0.0,  top  = 0.42,
+  p + patchwork::inset_element(h, left = 0.54, right = 1.0,
+                                 bottom = 0.0,  top  = 0.48,
                                  align_to = "panel")
 }
 
@@ -241,9 +244,9 @@ make_scatter <- function(site_name, show_y = TRUE, show_legend = FALSE) {
 
 cli::cli_h1("Building figure...")
 
-p1 <- make_scatter("Aigoual", show_y = TRUE,  show_legend = FALSE)
-p2 <- make_scatter("Blois",   show_y = FALSE, show_legend = FALSE)
-p3 <- make_scatter("Mormal",  show_y = FALSE, show_legend = TRUE)
+p1 <- make_scatter("Aigoual", show_y = TRUE,  show_x = FALSE, show_legend = FALSE)
+p2 <- make_scatter("Blois",   show_y = FALSE, show_x = TRUE,  show_legend = FALSE)
+p3 <- make_scatter("Mormal",  show_y = FALSE, show_x = FALSE, show_legend = TRUE)
 
 fig <- (p1 | p2 | p3)
 
