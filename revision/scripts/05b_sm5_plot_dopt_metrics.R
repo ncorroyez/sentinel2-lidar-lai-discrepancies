@@ -38,15 +38,6 @@ norm_colours  <- c(DSM_keepTrees = "#2166ac", DTM_keepTrees = "#d6604d")
 norm_labels   <- c(DSM_keepTrees = "DSM", DTM_keepTrees = "DTM")
 norm_linetypes <- c(DSM_keepTrees = "solid",  DTM_keepTrees = "dashed")
 
-# Vertical-line linetypes for d_opt methods (matching Main_01 spirit)
-method_linetypes <- c(
-  pearson = "dotted",
-  rmse    = "dashed",
-  bias    = "longdash",
-  slope   = "twodash",
-  pareto  = "solid"
-)
-
 # ── Load data ─────────────────────────────────────────────────────────────────
 
 atbd_csv <- here::here(
@@ -83,21 +74,9 @@ compute_dist_utopia <- function(sub) {
 dist_dt <- dt[, compute_dist_utopia(.SD), by = .(Site, Norm, h_min)]
 dt      <- merge(dt, dist_dt, by = c("Site", "Norm", "Depth", "h_min"))
 
-# ── Load d_opt reference if available ─────────────────────────────────────────
-
-dopt_csv <- here::here(
-  "revision", "output", "intermediate", "sm5", "dopt_reference.csv"
-)
-dopt_ref <- if (file.exists(dopt_csv)) {
-  d <- data.table::fread(dopt_csv)
-  d[Norm %in% norms_select]
-} else {
-  NULL
-}
-
 # ── Plot helper ───────────────────────────────────────────────────────────────
 
-make_metric_figure <- function(plot_dt, dopt_all, yvar, ylab,
+make_metric_figure <- function(plot_dt, yvar, ylab,
                                 ylim = NULL, show_legend = FALSE) {
 
   p <- ggplot2::ggplot(
@@ -137,51 +116,6 @@ make_metric_figure <- function(plot_dt, dopt_all, yvar, ylab,
   if (!is.null(ylim))
     p <- p + ggplot2::coord_cartesian(ylim = ylim)
 
-  # Vertical lines for d_opt — drawn with fixed aesthetics (no aes conflict
-  # with the main linetype = Norm mapping). One geom_vline call per method so
-  # each method gets its own linetype from method_linetypes.
-  if (!is.null(dopt_all) && nrow(dopt_all) > 0) {
-    if ("h_min" %in% names(dopt_all)) {
-      vlines_dt <- data.table::copy(
-        dopt_all[Norm %in% norms_select & Site %in% sites &
-                   h_min %in% h_min_values]
-      )
-      vlines_dt[, h_min_label := factor(
-        paste0("h_min = ", h_min, " m"),
-        levels = paste0("h_min = ", h_min_values, " m")
-      )]
-    } else {
-      # dopt_reference.csv has no h_min column — replicate across all facets
-      vlines_dt <- data.table::rbindlist(lapply(h_min_values, function(hm) {
-        sub <- data.table::copy(dopt_all[Norm %in% norms_select & Site %in% sites])
-        sub[, h_min_label := factor(
-          paste0("h_min = ", hm, " m"),
-          levels = paste0("h_min = ", h_min_values, " m")
-        )]
-        sub
-      }))
-    }
-
-    if (nrow(vlines_dt) > 0) {
-      for (meth in names(method_linetypes)) {
-        sub_m <- vlines_dt[method_dopt == meth]
-        if (nrow(sub_m) == 0L) next
-        for (norm_i in norms_select) {
-          sub_mn <- sub_m[Norm == norm_i]
-          if (nrow(sub_mn) == 0L) next
-          p <- p + ggplot2::geom_vline(
-            data      = sub_mn,
-            ggplot2::aes(xintercept = d_opt),
-            colour    = norm_colours[[norm_i]],
-            linetype  = method_linetypes[[meth]],
-            linewidth = 0.45,
-            alpha     = 0.80
-          )
-        }
-      }
-    }
-  }
-
   p
 }
 
@@ -212,17 +146,13 @@ for (spec in metrics_spec) {
 
   fig <- make_metric_figure(
     plot_dt     = dt,
-    dopt_all    = dopt_ref,
     yvar        = spec$var,
     ylab        = spec$ylab,
     show_legend = (spec$var == "dist_utopia")
   ) +
     ggplot2::labs(
       title    = paste0("d_opt metric — ", spec$ylab, " (ATBD)"),
-      subtitle = paste(
-        "Gray zone: depth > h_min (redundancy zone, excluded from d_opt selection)",
-        "| Vertical lines: d_opt per method"
-      )
+      subtitle = "Gray zone: depth > h_min (redundancy zone, excluded from d_opt selection)"
     ) +
     ggplot2::theme(
       plot.title    = ggplot2::element_text(size = 11, face = "bold"),
@@ -239,21 +169,18 @@ for (spec in metrics_spec) {
 
 cat("Plotting combined 5-panel figure...\n")
 
-p_R      <- make_metric_figure(dt, dopt_ref, "R",           "Pearson R")
-p_RMSE   <- make_metric_figure(dt, dopt_ref, "RMSE",        "RMSE (m²/m²)")
-p_Bias   <- make_metric_figure(dt, dopt_ref, "abs_Bias",    "|Bias| (m²/m²)")
-p_Slope  <- make_metric_figure(dt, dopt_ref, "abs_Slope1",  "|Slope - 1|")
-p_Pareto <- make_metric_figure(dt, dopt_ref, "dist_utopia", "Pareto dist.",
+p_R      <- make_metric_figure(dt, "R",           "Pearson R")
+p_RMSE   <- make_metric_figure(dt, "RMSE",        "RMSE (m²/m²)")
+p_Bias   <- make_metric_figure(dt, "abs_Bias",    "|Bias| (m²/m²)")
+p_Slope  <- make_metric_figure(dt, "abs_Slope1",  "|Slope - 1|")
+p_Pareto <- make_metric_figure(dt, "dist_utopia", "Pareto dist.",
                                 show_legend = TRUE)
 
 fig_combined <-
   (p_R | p_RMSE | p_Bias) / (p_Slope | p_Pareto | patchwork::plot_spacer()) +
   patchwork::plot_annotation(
     title    = "d_opt — five agreement metrics vs canopy integration depth (ATBD)",
-    subtitle = paste(
-      "Gray: redundancy zone (depth > h_min) | Vertical lines: d_opt per method",
-      "(dotted=pearson, dashed=rmse, longdash=bias, twodash=slope, solid=pareto)"
-    ),
+    subtitle = "Gray: redundancy zone (depth > h_min)",
     theme = ggplot2::theme(
       plot.title    = ggplot2::element_text(size = 12, face = "bold"),
       plot.subtitle = ggplot2::element_text(size = 8,  colour = "grey40")
