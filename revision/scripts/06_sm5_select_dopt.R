@@ -56,12 +56,14 @@ t0 <- proc.time()
 dopt_reference <- select_dopt(
   metrics_dt,
   methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth      = h_min_select,
   prosail_filter = "ATBD"
 )
 
 dopt_all <- select_dopt(
   metrics_dt,
   methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth      = h_min_select,
   prosail_filter = "all"
 )
 

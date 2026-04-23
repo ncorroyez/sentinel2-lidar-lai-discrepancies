@@ -416,6 +416,12 @@ select_prosail_opt <- function(metrics_dt,
 #'   Bias (numeric), Slope (numeric), ATBD (logical).
 #' @param methods Character vector. Selection methods to apply.
 #'   Default \code{c("pearson", "rmse", "bias", "pareto")}.
+#' @param max_depth Integer or \code{NULL}. Upper bound on depth considered for
+#'   d_opt selection. Depths > \code{max_depth} are excluded before running any
+#'   selection method. When \code{NULL} (default) all depths are used. Set to
+#'   \code{h_min} to enforce the redundancy-zone constraint: pixels filtered at
+#'   h_min have heights > h_min, so depths > h_min repeat the same canopy crown
+#'   material and provide no additional information.
 #' @param prosail_filter Character scalar or vector controlling which PROSAIL
 #'   columns are included before selection:
 #'   \describe{
@@ -468,6 +474,7 @@ select_prosail_opt <- function(metrics_dt,
 #' @export
 select_dopt <- function(metrics_dt,
                         methods        = c("pearson", "rmse", "bias", "pareto"),
+                        max_depth      = NULL,
                         prosail_filter = "ATBD") {
 
   # ── Filter PROSAIL columns ───────────────────────────────────────────────────
@@ -477,6 +484,13 @@ select_dopt <- function(metrics_dt,
     metrics_f <- metrics_dt
   } else {
     metrics_f <- metrics_dt[Column %in% prosail_filter]
+  }
+
+  # ── Enforce redundancy-zone constraint ──────────────────────────────────────
+  # Pixels filtered at h_min have heights > h_min; depths > h_min integrate
+  # the same crown material and add no new signal → exclude before selection.
+  if (!is.null(max_depth)) {
+    metrics_f <- metrics_f[Depth <= max_depth]
   }
 
   # ── Unique (Site, Norm, Column) triplets ─────────────────────────────────────
