@@ -6,11 +6,14 @@
 #         Sentinel-2 reflectance raster, producing spatially continuous
 #         LAI_S2_opt maps used as inputs for SM6b.
 #
-#         Two scenarios are processed:
+#         Three scenarios are processed:
 #           per_site  : site-specific d_opt and Column_opt (Pareto).
 #                       Output: s2lai_summer_opt_per_site_res_10_m.tif
+#           common    : all-sites Pareto d_opt applied to each site.
+#                       (d_opt_source = "all_sites" in prosail_opt.csv)
+#                       Output: s2lai_summer_opt_common_res_10_m.tif
 #           fixed_4   : d_opt = 4 m for all sites (submitted-paper reference).
-#                       Output: s2lai_summer_opt_fixed4_res_10_m.tif
+#                       Output: s2lai_summer_opt_fixed_4_res_10_m.tif
 #
 #         Both rasters per site are written to:
 #           revision/output/intermediate/sm6/{site}/
@@ -37,9 +40,10 @@ norm_ref        <- "DSM_keepTrees"
 name_strategy   <- "LIDFa_lai_LMA_BROWN"
 band_prefixes   <- c("B03", "B04", "B08")
 
-# Scenarios to process: named list of d_opt_source labels → output filename suffix
+# Scenarios to process: named list of output suffix → d_opt_source label in prosail_opt.csv
 scenarios <- list(
   per_site = "per_site",
+  common   = "all_sites",
   fixed_4  = "fixed_4"
 )
 
