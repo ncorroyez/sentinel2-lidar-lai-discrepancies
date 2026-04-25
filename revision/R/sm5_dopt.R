@@ -278,6 +278,12 @@ select_prosail_opt <- function(metrics_dt,
 
   dopt_ref <- dopt_dt[method_dopt == dopt_method, .(Site, Norm, d_opt)]
 
+  # Normalise combined-site labels produced by script 06 ("Sites averaged",
+  # "Sites combined", etc.) to the canonical "All_sites" key expected below.
+  combined_labels <- c("Sites averaged", "Sites_averaged",
+                       "Sites combined",  "Sites_combined")
+  dopt_ref[Site %in% combined_labels, Site := "All_sites"]
+
   if (nrow(dopt_ref) == 0L) {
     cli::cli_abort(
       "select_prosail_opt: no rows in dopt_dt with method_dopt == {.val {dopt_method}}."
