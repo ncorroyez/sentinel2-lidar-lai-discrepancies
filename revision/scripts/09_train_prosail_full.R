@@ -3,12 +3,11 @@
 # desc:   Orchestration — trains all 270 SVR configurations (LIDFa/lai/LMA/BROWN
 #         grid) under three LAI scenarios, for each of the three study sites.
 #
-#         The three scenarios differ only in the LAI source used for the
+#         The two scenarios differ only in the LAI source used for the
 #         LiDAR_LAI_Best_Site_Depth variant of the simulation grid (lai index 6):
 #
 #           per_site  : LAI_ALS_dopt per site's own Pareto d_opt
-#           common    : LAI_ALS_dopt at the All_sites Pareto d_opt
-#           fixed_4   : LAI_ALS at 4 m depth (reproduces submitted paper)
+#           common    : LAI_ALS_dopt at the combined-sites Pareto d_opt
 #
 #         LAI_ALS_dopt rasters are read from script 07 output.
 #         The LiDAR_LAI variant (lai index 5) always uses the full-canopy
@@ -23,7 +22,7 @@
 # Output: 270 RDS per site × scenario at:
 #   revision/output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/{scenario}/
-#   (scenario ∈ {per_site, common, fixed_4})
+#   (scenario ∈ {per_site, common})
 #
 # Run from the project root (NC_Full/):
 #   source("revision/scripts/08_train_prosail_full.R")
@@ -32,8 +31,9 @@
 library("here")
 library("terra")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "prosail_lut.R"))
-source(here::here("PROSAIL-Optimization", "02_CODES", "libraries", "get_s2_angles.R"))
+source(file.path(paths$prosail_codes, "libraries", "get_s2_angles.R"))
 
 # ── Global parameters ─────────────────────────────────────────────────────────
 
@@ -42,12 +42,21 @@ dates    <- c(Aigoual = "2021-07-11", Blois = "2021-06-14", Mormal = "2021-06-14
 
 parms2test             <- c("LIDFa", "lai", "LMA", "BROWN")
 name_strategy          <- "LIDFa_lai_LMA_BROWN"
-nbSamples_train        <- 1000
+nbSamples_train        <- 5000
 S2BandSelect           <- c("B3", "B4", "B8")
 nbCPU                  <- 1L
 nbValuesPerSiteForPool <- 5000
 
-lai_scenarios <- c("per_site", "common", "fixed_4")
+lai_scenarios <- c("per_site", "common")
+
+# k / scan-angle rescaling — must match 07 and 11.
+# scale_factor = (k_ref / k_select) × cos(theta_select)
+# applied to the full-canopy ladstack sum pool (computed at k_ref=0.5, theta=0°).
+# lai_dopt_values_vec from 07 rasters is already scaled — no second scaling needed.
+k_ref        <- 0.5
+k_select     <- 0.6
+theta_select <- 0    # degrees from nadir (scan angle correction handled separately)
+scale_factor <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
 set.seed(42)
 
@@ -74,8 +83,8 @@ combination_labels <- apply(simulations$grid_simu, 1, function(row) {
 
 geom_s2 <- list()
 for (site in sites) {
-  path_angles <- here::here("03_RESULTS", site, "PROSAIL_Optimization", "geomAcq_S2")
-  path_bbox   <- here::here("01_DATA", site, "Geo_Files", "aoi_bbox.GPKG")
+  path_angles <- file.path(paths$ext_results, site, "PROSAIL_Optimization", "geomAcq_S2")
+  path_bbox   <- file.path(paths$raw_data, site, "Geo_Files", "aoi_bbox.GPKG")
   geom_s2[[site]] <- get_s2_angles(
     path_angles = path_angles,
     dateAcq     = dates[[site]],
@@ -90,7 +99,7 @@ for (site in sites) {
 lai_values_all <- list()
 
 for (site in sites) {
-  lidar_dir <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+  lidar_dir <- file.path(paths$prosail_lidar, site, "LiDAR")
 
   lidar_lai_rast <- sum(terra::rast(
     file.path(lidar_dir, "PAD_Profiles_Classic", "ladstack.tif")
@@ -108,9 +117,10 @@ for (site in sites) {
   )
 }
 
-lai_values_vec <- unlist(lai_values_all, use.names = FALSE)
+lai_values_vec <- unlist(lai_values_all, use.names = FALSE) * scale_factor
 stopifnot(length(lai_values_vec) == length(sites) * nbValuesPerSiteForPool)
-cat("Full-canopy cross-site pool:", length(lai_values_vec), "values\n")
+cat("Full-canopy cross-site pool:", length(lai_values_vec), "values (scale_factor=",
+    round(scale_factor, 4), ")\n")
 
 # ── LAI_ALS_dopt raster root ──────────────────────────────────────────────────
 
@@ -133,7 +143,7 @@ for (lai_scenario in lai_scenarios) {
     if (!file.exists(dopt_tif))
       stop("LAI_ALS_dopt raster not found — run script 07 first:\n  ", dopt_tif)
 
-    lidar_dir <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+    lidar_dir <- file.path(paths$prosail_lidar, site, "LiDAR")
     max_rast  <- terra::rast(file.path(lidar_dir, "max_res_10_m.tif"))
 
     lai_dopt_rast <- terra::rast(dopt_tif)

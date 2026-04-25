@@ -49,6 +49,7 @@ library(here)
 library(terra)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sm6_heterogeneity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
@@ -69,15 +70,15 @@ focal_Ks <- c(3L, 5L)
 
 source_path <- function(site, metric) {
   if (metric == "DSM") {
-    here::here("03_RESULTS", site, "LiDAR", "dsm", "res_1_m",
+    file.path(paths$ext_results, site, "LiDAR", "dsm", "res_1_m",
                "rasterize_canopy.vrt")
   } else {
-    here::here("03_RESULTS", site, "LiDAR", "chm", "res_1_m", "chm.tif")
+    file.path(paths$ext_results, site, "LiDAR", "chm", "res_1_m", "chm.tif")
   }
 }
 
 mask_path <- function(site) {
-  here::here("03_RESULTS", site, "LiDAR", "Heterogeneity_Masks",
+  file.path(paths$ext_results, site, "LiDAR", "Heterogeneity_Masks",
              "artifacts_deciduous_only_low_vegetation_majority_90_p_res_10_m.envi")
 }
 

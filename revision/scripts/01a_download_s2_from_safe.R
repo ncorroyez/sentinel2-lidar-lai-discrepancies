@@ -16,6 +16,7 @@
 
 library("here")
 library("preprocS2")
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sentinel2_preprocessing.R"))
 
 # ── Site parameters — unchanged from Main_s2_00_download.R ────────────────────
@@ -41,10 +42,10 @@ s2source   <- "SAFE"
 
 for (site in sites) {
 
-  safe_path  <- here::here("01_DATA", site, "Sentinel-2", dates[[site]],
-                            safe_names[[site]])
-  aoi_path   <- here::here("01_DATA", site, "Geo_Files", "utm_init.shp")
-  out_root   <- here::here("03_RESULTS", site, "PROSAIL_Optimization")
+  safe_path  <- file.path(paths$raw_data, site, "Sentinel-2", dates[[site]],
+                           safe_names[[site]])
+  aoi_path   <- file.path(paths$raw_data, site, "Geo_Files", "utm_init.shp")
+  out_root   <- file.path(paths$ext_results, site, "PROSAIL_Optimization")
 
   # Step 1 — extract reflectances and metadata from SAFE
   s2obj <- load_s2_from_safe(

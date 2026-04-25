@@ -25,8 +25,9 @@
 library("here")
 library("terra")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "prosail_lut.R"))
-source(here::here("PROSAIL-Optimization", "02_CODES", "libraries", "get_s2_angles.R"))
+source(file.path(paths$prosail_codes, "libraries", "get_s2_angles.R"))
 
 # ── Global parameters ─────────────────────────────────────────────────────────
 
@@ -35,9 +36,17 @@ dates    <- c(Aigoual = "2021-07-11", Blois = "2021-06-14", Mormal = "2021-06-14
 
 parms2test           <- c("LIDFa", "lai", "LMA", "BROWN")
 name_strategy        <- "LIDFa_lai_LMA_BROWN"
-nbSamples_train      <- 1000
+nbSamples_train      <- 5000
 S2BandSelect         <- c("B3", "B4", "B8")
 nbValuesPerSiteForPool <- 5000
+
+# k / scan-angle rescaling — applied to all LiDAR LAI pools (computed at
+# k_ref = 0.5, theta = 0° in the ladstack / PAD rasters).
+# Must match 07, 09, 11.
+k_ref        <- 0.5
+k_select     <- 0.6
+theta_select <- 30   # degrees from nadir
+scale_factor <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
 set.seed(42)
 
@@ -62,8 +71,8 @@ cat("ATBD label:", atbd_label, "\n")
 
 geom_s2 <- list()
 for (site in sites) {
-  path_angles <- here::here("03_RESULTS", site, "PROSAIL_Optimization", "geomAcq_S2")
-  path_bbox   <- here::here("01_DATA", site, "Geo_Files", "aoi_bbox.GPKG")
+  path_angles <- file.path(paths$ext_results, site, "PROSAIL_Optimization", "geomAcq_S2")
+  path_bbox   <- file.path(paths$raw_data, site, "Geo_Files", "aoi_bbox.GPKG")
   geom_s2[[site]] <- get_s2_angles(
     path_angles = path_angles,
     dateAcq     = dates[[site]],
@@ -77,7 +86,7 @@ lai_values_all   <- list()
 lai4m_values_all <- list()
 
 for (site in sites) {
-  lidar_dir <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+  lidar_dir <- file.path(paths$prosail_lidar, site, "LiDAR")
 
   lidar_lai_rast    <- sum(terra::rast(
     file.path(lidar_dir, "PAD_Profiles_Classic", "ladstack.tif")
@@ -100,8 +109,8 @@ for (site in sites) {
                                      replace = length(lai4m_pool) < nbValuesPerSiteForPool)
 }
 
-lai_values_vec   <- unlist(lai_values_all,   use.names = FALSE)
-lai4m_values_vec <- unlist(lai4m_values_all, use.names = FALSE)
+lai_values_vec   <- unlist(lai_values_all,   use.names = FALSE) * scale_factor
+lai4m_values_vec <- unlist(lai4m_values_all, use.names = FALSE) * scale_factor
 
 # ── Phase B — Per-site ATBD SVR training ─────────────────────────────────────
 
@@ -110,14 +119,14 @@ for (site in sites) {
   cat("\n── Training ATBD SVR for site:", site, "──\n")
   t_start <- Sys.time()
 
-  lidar_dir_b <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+  lidar_dir_b <- file.path(paths$prosail_lidar, site, "LiDAR")
 
   lidar_lai_common_rast <- terra::rast(
     file.path(lidar_dir_b, "lidar_lai_best_common_depth.tif")
-  )
+  ) * scale_factor
   lidar_lai_3m_rast <- terra::rast(
     file.path(lidar_dir_b, "lidar_lai_3m.tif")
-  )
+  ) * scale_factor
 
   models_dir <- here::here(
     "revision", "output", "intermediate", "PROSAIL_Models",

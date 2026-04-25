@@ -1,24 +1,18 @@
 # ---
 # title:  05c_sm5_k_zmin_sensitivity_dopt.R
-# desc:   Sensitivity of Pareto d_opt to the extinction coefficient k
-#         (0.3 to 0.8) and to the minimum height in the LAD equation z_min
-#         (2, 3, 5 m).
+# desc:   Sensitivity of Pareto d_opt to:
+#           - all (k, theta) combinations: k ∈ {0.3..0.8}, theta ∈ {0..30°}
+#             Combined rescaling: PAD(k, θ) = PAD_ref × (k_ref/k) × cos(θ)
+#           - minimum height z_min (2, 3, 5 m): per-pixel canopy depth cap
+#             (k = k_ref, theta = 0°)
+#         All sensitivities are computed for each individual site and for
+#         "Sites_combined" (all 3 sites pooled), for DSM_keepTrees and
+#         DTM_keepTrees.
 #
-#         k sensitivity: Beer-Lambert gives LAI_ALS proportional to 1/k,
-#         so LAI_ALS_k = LAI_ALS_{k_ref} x (k_ref / k). Scaled from the
-#         existing PAD sampling CSVs; S2 estimates unchanged.
+#         Combined rescaling: PAD(k, θ) = PAD_ref × (k_ref / k) × cos(θ)
+#         z_min cap: for depth d, effective depth = min(d, floor(max_h - z_min))
 #
-#         z_min sensitivity: the PAD rasters integrate from canopy top down
-#         to x.5 m above ground (PAD_{x.5}_40.tif, depth = 40 - floor(x)).
-#         The existing z_min is ~2 m (deepest file: PAD_2.5_40.tif).
-#         For z_min > 2 m, each pixel's PAD at depth d is capped at the
-#         PAD value for depth min(d, floor(max_height - z_min)), where
-#         max_height per pixel is read from the sampling GPKG produced by 03a.
-#         This correctly excludes the bottom z_min metres of each canopy.
-#
-#         h_min_pixel is fixed at 10 m (reference analysis value). Both
-#         sensitivities are computed for DSM_keepTrees and DTM_keepTrees,
-#         for each of the three sites.
+#         h_min_pixel is fixed at 10 m (reference analysis value).
 #
 # Prerequisites:
 #   03a — Sampling_stratified_uniform_hmin10_nbSamples_5000.GPKG
@@ -34,6 +28,7 @@ library("data.table")
 library("terra")
 library("cli")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sm5_metrics.R"))
 source(here::here("revision", "R", "sm5_dopt.R"))
 
@@ -49,6 +44,10 @@ h_min_pixel     <- 10L          # pixel selection threshold (fixed)
 k_ref           <- 0.5          # k used to compute the existing PAD CSVs
 k_values        <- seq(0.3, 0.8, by = 0.1)
 z_min_values    <- c(2, 3, 5)   # metres above ground
+theta_values    <- c(0, 5, 10, 15, 20, 25, 30)  # scan angles in degrees
+
+out_dir <- here::here("revision", "output", "intermediate", "sm5")
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # ── Helper: build PAD wide matrix + max_height for one (site, norm) ───────────
 # Returns a list:
@@ -59,8 +58,8 @@ z_min_values    <- c(2, 3, 5)   # metres above ground
 
 load_site_norm_data <- function(site, norm) {
 
-  gpkg_path <- here::here(
-    "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
+  gpkg_path <- file.path(
+    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
     paste0("Sampling_", sampling_method,
            "_hmin", h_min_pixel,
            "_nbSamples_", nb_samples, ".GPKG")
@@ -96,8 +95,8 @@ load_site_norm_data <- function(site, norm) {
   colnames(pad_mat) <- as.character(depths)
 
   for (depth in depths) {
-    lidar_csv <- here::here(
-      "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
+    lidar_csv <- file.path(
+      paths$ext_results, site, "PROSAIL_Optimization", "sampling",
       paste0("PAD_", norm, "_Depth_", depth,
              "_Samples_", sampling_method,
              "_hmin", h_min_pixel,
@@ -138,82 +137,155 @@ compute_metrics_from_mat <- function(pad_mat, s2_vals, site, norm,
   data.table::rbindlist(rows, use.names = TRUE, fill = TRUE)
 }
 
-# ── Main computation loop ─────────────────────────────────────────────────────
+# ── Step 1: load all per-site data ────────────────────────────────────────────
 
-cli::cli_h1("Loading data and computing metrics...")
+cli::cli_h1("Loading data...")
 
-k_rows    <- list()
-zmin_rows <- list()
+all_dat <- list()   # keyed by "<site> <norm>"
 
 for (site in sites) {
   for (norm in norms_select) {
-
     cli::cli_alert_info("{site} / {norm}")
     dat <- load_site_norm_data(site, norm)
+    all_dat[[paste(site, norm)]] <- dat
+  }
+}
+
+# ── Step 2: build Sites_combined (pixel pool, always computed) ────────────────
+
+cli::cli_h2("Building Sites_combined (pixel pool)...")
+for (norm in norms_select) {
+  site_dats <- Filter(Negate(is.null),
+                      lapply(sites, function(s) all_dat[[paste(s, norm)]]))
+  if (length(site_dats) == 0L) next
+  combined <- list(
+    pad_mat = do.call(rbind, lapply(site_dats, `[[`, "pad_mat")),
+    max_h   = do.call(c,    lapply(site_dats, `[[`, "max_h")),
+    s2_vals = do.call(c,    lapply(site_dats, `[[`, "s2_vals"))
+  )
+  all_dat[[paste("Sites_combined", norm)]] <- combined
+  cli::cli_alert_success(
+    "Sites_combined / {norm}: {nrow(combined$pad_mat)} samples"
+  )
+}
+all_site_labels <- c(sites, "Sites_combined")
+
+# ── Step 3: compute sensitivity metrics ───────────────────────────────────────
+
+cli::cli_h1("Computing sensitivity metrics...")
+
+kt_rows   <- list()   # all (k, theta) combinations
+zmin_rows <- list()
+
+n_kt <- length(k_values) * length(theta_values)
+
+for (site_label in all_site_labels) {
+  for (norm in norms_select) {
+
+    dat <- all_dat[[paste(site_label, norm)]]
     if (is.null(dat)) next
 
-    # ── k sensitivity (z_min fixed at 2 m — existing PAD baseline) ────────────
+    cli::cli_h3("{site_label} / {norm}")
+
+    # ── k × theta full factorial (z_min = 2 m) ────────────────────────────────
+    cli::cli_alert_info("{n_kt} (k, theta) combinations...")
     for (k_val in k_values) {
-      scaled_mat <- dat$pad_mat * (k_ref / k_val)
-      rows <- compute_metrics_from_mat(
-        scaled_mat, dat$s2_vals, site, norm,
-        extra = list(k = k_val, z_min = 2)
-      )
-      k_rows <- c(k_rows, list(rows))
+      for (theta_val in theta_values) {
+        scale_factor <- (k_ref / k_val) * cos(theta_val * pi / 180)
+        scaled_mat   <- dat$pad_mat * scale_factor
+        rows <- compute_metrics_from_mat(
+          scaled_mat, dat$s2_vals, site_label, norm,
+          extra = list(k = k_val, theta = theta_val, z_min = 2)
+        )
+        kt_rows <- c(kt_rows, list(rows))
+      }
     }
 
-    # ── z_min sensitivity (k fixed at k_ref = 0.5) ────────────────────────────
+    # ── z_min sensitivity (k = k_ref, theta = 0°) ────────────────────────────
     for (z_min in z_min_values) {
-      # Per-pixel cap: depth beyond which the pixel's canopy is below z_min
       cap_depth <- as.integer(pmax(1L, floor(dat$max_h - z_min)))
 
-      # Build corrected PAD matrix: for each pixel and depth d,
-      # use PAD at min(d, cap_depth_i) — caps at the last valid layer
       corrected_mat <- dat$pad_mat
       for (depth in depths) {
-        eff_d <- pmin(depth, cap_depth)          # per pixel, integer 1..38
-        # Replace column with per-pixel value at effective depth
+        eff_d <- pmin(depth, cap_depth)
         corrected_mat[, depth] <- dat$pad_mat[cbind(seq_len(nrow(dat$pad_mat)),
                                                       eff_d)]
       }
 
       rows <- compute_metrics_from_mat(
-        corrected_mat, dat$s2_vals, site, norm,
-        extra = list(k = k_ref, z_min = z_min)
+        corrected_mat, dat$s2_vals, site_label, norm,
+        extra = list(k = k_ref, theta = 0, z_min = z_min)
       )
       zmin_rows <- c(zmin_rows, list(rows))
     }
   }
 }
 
-k_dt    <- data.table::rbindlist(k_rows,    use.names = TRUE, fill = TRUE)
+kt_dt   <- data.table::rbindlist(kt_rows,   use.names = TRUE, fill = TRUE)
 zmin_dt <- data.table::rbindlist(zmin_rows, use.names = TRUE, fill = TRUE)
 
-# ── d_opt (Pareto) for k sensitivity ──────────────────────────────────────────
+# ── Sites_averaged: average per-site metrics across the 3 sites (always) ──────
 
-cli::cli_h1("d_opt sensitivity to k (z_min = 2 m, h_min_pixel = {h_min_pixel} m)")
+cli::cli_h2("Computing Sites_averaged (mean metrics across sites)...")
 
-dopt_k_rows <- list()
-for (k_val in k_values) {
-  sub <- k_dt[k == k_val & Norm %in% norms_select]
-  if (nrow(sub) == 0L) next
-  d <- select_dopt(sub, methods = "pareto", max_depth = h_min_pixel,
-                   prosail_filter = "ATBD")
-  d[method_dopt == "pareto", k := k_val]
-  dopt_k_rows <- c(dopt_k_rows, list(d[method_dopt == "pareto"]))
+avg_by <- function(dt, grp_vars) {
+  dt[Site %in% sites,
+    .(R     = mean(R,     na.rm = TRUE),
+      R2    = mean(R2,    na.rm = TRUE),
+      RMSE  = mean(RMSE,  na.rm = TRUE),
+      Bias  = mean(Bias,  na.rm = TRUE),
+      Slope = mean(Slope, na.rm = TRUE),
+      ATBD  = TRUE, Column = "LAI_atbd"),
+    by = grp_vars
+  ][, Site := "Sites_averaged"]
 }
-dopt_k <- data.table::rbindlist(dopt_k_rows, use.names = TRUE, fill = TRUE)
 
-wide_k <- data.table::dcast(
-  dopt_k, Site + Norm ~ paste0("k=", k),
+kt_dt   <- data.table::rbindlist(
+  list(kt_dt,   avg_by(kt_dt,   c("Norm", "Depth", "k", "theta", "z_min"))),
+  use.names = TRUE, fill = TRUE
+)
+zmin_dt <- data.table::rbindlist(
+  list(zmin_dt, avg_by(zmin_dt, c("Norm", "Depth", "k", "theta", "z_min"))),
+  use.names = TRUE, fill = TRUE
+)
+
+cli::cli_alert_success(
+  "Sites_averaged appended — kt_dt: {nrow(kt_dt)} rows, zmin_dt: {nrow(zmin_dt)} rows"
+)
+
+# ── Write kt_dt to CSV (read by 05b / 06 for custom k and theta) ──────────────
+
+kt_csv <- file.path(out_dir, "kt_sensitivity_atbd_LIDFa_lai_LMA_BROWN.csv")
+data.table::fwrite(kt_dt, kt_csv)
+cli::cli_alert_success("Written: {kt_csv}  ({nrow(kt_dt)} rows)")
+
+# ── d_opt (Pareto) for k × theta factorial ────────────────────────────────────
+
+cli::cli_h1("d_opt sensitivity to (k, theta) — {n_kt} combinations, h_min_pixel = {h_min_pixel} m")
+
+dopt_kt_rows <- list()
+for (k_val in k_values) {
+  for (theta_val in theta_values) {
+    sub <- kt_dt[k == k_val & theta == theta_val & Norm %in% norms_select]
+    if (nrow(sub) == 0L) next
+    d <- select_dopt(sub, methods = "pareto", max_depth = h_min_pixel,
+                     prosail_filter = "ATBD")
+    d[method_dopt == "pareto", `:=`(k = k_val, theta = theta_val)]
+    dopt_kt_rows <- c(dopt_kt_rows, list(d[method_dopt == "pareto"]))
+  }
+}
+dopt_kt <- data.table::rbindlist(dopt_kt_rows, use.names = TRUE, fill = TRUE)
+
+wide_kt <- data.table::dcast(
+  dopt_kt, Site + Norm ~ paste0("k=", k, "_theta=", theta),
   value.var = "d_opt"
 )
-data.table::setorder(wide_k, Norm, Site)
-print(wide_k)
+data.table::setorder(wide_kt, Norm, Site)
+print(wide_kt)
 
 # ── d_opt (Pareto) for z_min sensitivity ──────────────────────────────────────
 
-cli::cli_h1("d_opt sensitivity to z_min (k = {k_ref}, h_min_pixel = {h_min_pixel} m)")
+cli::cli_h1("d_opt sensitivity to z_min (k = {k_ref}, theta = 0°, h_min_pixel = {h_min_pixel} m)")
 
 dopt_zmin_rows <- list()
 for (z_min_val in z_min_values) {

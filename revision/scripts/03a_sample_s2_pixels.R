@@ -23,6 +23,7 @@ library("sgsR")
 library("dplyr")
 library("readr")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sentinel2_sampling.R"))
 
 # ── Global parameters — unchanged from Main_s2_02A_extract.R ─────────────────
@@ -47,25 +48,25 @@ for (site in sites) {
   l2a <- l2a_ids[[site]]
 
   # Input paths
-  aoi_path          <- here::here("01_DATA", site, "Geo_Files", name_vect)
-  S2_path           <- here::here("03_RESULTS", site, "PROSAIL_Optimization",
-                                   l2a, "Reflectance", paste0(l2a, "_Refl"))
-  lidar_dir         <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR")
+  aoi_path          <- file.path(paths$raw_data, site, "Geo_Files", name_vect)
+  S2_path           <- file.path(paths$ext_results, site, "PROSAIL_Optimization",
+                                  l2a, "Reflectance", paste0(l2a, "_Refl"))
+  lidar_dir         <- file.path(paths$prosail_lidar, site, "LiDAR")
   lidar_lai_path    <- file.path(lidar_dir, "PAD_Profiles_Classic", "ladstack.tif")
-  mean_path         <- here::here("01_DATA", site, "LiDAR", "mean_res_10_m.tif")
+  mean_path         <- file.path(paths$raw_data, site, "LiDAR", "mean_res_10_m.tif")
   max_path          <- file.path(lidar_dir, "max_res_10_m.tif")
-  lskew_path        <- here::here("01_DATA", site, "LiDAR", "lskew_res_10_m.tif")
-  field_points_path <- here::here("01_DATA", site, "Geo_Files",
-                                   "data_utm31n.geojson")
+  lskew_path        <- file.path(paths$raw_data, site, "LiDAR", "lskew_res_10_m.tif")
+  field_points_path <- file.path(paths$raw_data, site, "Geo_Files",
+                                  "data_utm31n.geojson")
 
   # Output sampling directory
-  out_sampling <- here::here("03_RESULTS", site, "PROSAIL_Optimization",
-                              "sampling")
+  out_sampling <- file.path(paths$ext_results, site, "PROSAIL_Optimization",
+                             "sampling")
   dir.create(out_sampling, showWarnings = FALSE, recursive = TRUE)
 
   # Step 1 — clip AOI to valid S2 + LiDAR pixels
   # NOTE: output redirected to 03_RESULTS/ (original wrote to 01_DATA/).
-  aoi_sampling_path <- here::here(out_sampling, "aoi_sampling_prep.gpkg")
+  aoi_sampling_path <- file.path(out_sampling, "aoi_sampling_prep.gpkg")
   aoi_sampling_path <- align_and_remove_na_for_aoi(
     aoi_path       = aoi_path,
     S2_path        = S2_path,
@@ -95,10 +96,10 @@ for (site in sites) {
       )
 
       # Save sample locations (GeoPackage) with sample_id
-      filename_sampling <- here::here(out_sampling,
-                                       paste0("Sampling_", Samplingmethod,
-                                              "_hmin", h_min,
-                                              "_nbSamples_", nbSamples, ".GPKG"))
+      filename_sampling <- file.path(out_sampling,
+                                      paste0("Sampling_", Samplingmethod,
+                                             "_hmin", h_min,
+                                             "_nbSamples_", nbSamples, ".GPKG"))
       sample_locations <- S2Refl$sample_location
       sample_locations$sample_id <- seq_len(nrow(sample_locations))
       terra::writeVector(x        = sample_locations,
@@ -107,10 +108,10 @@ for (site in sites) {
                           overwrite = TRUE)
 
       # Save S2 reflectances (TSV CSV)
-      filename_refl <- here::here(out_sampling,
-                                   paste0("S2_reflectance_", Samplingmethod,
-                                          "_hmin", h_min,
-                                          "_nbSamples_", nbSamples, ".csv"))
+      filename_refl <- file.path(out_sampling,
+                                  paste0("S2_reflectance_", Samplingmethod,
+                                         "_hmin", h_min,
+                                         "_nbSamples_", nbSamples, ".csv"))
       s2_refl <- S2Refl$S2_refl
       readr::write_delim(x = s2_refl, file = filename_refl, delim = "\t")
     }

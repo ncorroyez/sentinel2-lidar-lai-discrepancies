@@ -22,6 +22,7 @@
 
 library("here")
 library("preprocS2")
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sentinel2_preprocessing.R"))
 
 # ── Site parameters — unchanged from Main_s2_01_download.R ────────────────────
@@ -40,8 +41,8 @@ name_vect <- "utm_init.shp"
 
 for (site in sites) {
 
-  aoi_path   <- here::here("01_DATA", site, "Geo_Files", name_vect)
-  output_dir <- here::here("03_RESULTS", site, "PROSAIL_Optimization")
+  aoi_path   <- file.path(paths$raw_data, site, "Geo_Files", name_vect)
+  output_dir <- file.path(paths$ext_results, site, "PROSAIL_Optimization")
 
   # download_s2_cdse() reads CDSE_ID and CDSE_SECRET from .Renviron at runtime
   download_s2_cdse(

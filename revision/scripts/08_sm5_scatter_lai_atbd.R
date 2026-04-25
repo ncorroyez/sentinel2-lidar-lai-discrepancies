@@ -22,6 +22,7 @@ library("ggplot2")
 library("patchwork")
 library("cli")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sm5_metrics.R"))
 
 # ── Site metadata ─────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ cli::cli_h1("Loading raster data (all pixels)...")
 
 load_raster_pairs <- function(site) {
   meta <- site_meta[[site]]
-  base <- here::here("03_RESULTS", site, "Metrics", "Deciduous_Only")
+  base <- file.path(paths$ext_results, site, "Metrics", "Deciduous_Only")
 
   als_path <- file.path(base, "lidarlai_res_10_m.tif")
   s2_path  <- file.path(base,
@@ -159,8 +160,8 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
   # Annotation: top-right, one metric per line
   x_ann <- 14.6
   y_top <- 14.65
-  dy    <- 0.95          # tight inter-line spacing
-  sz    <- 3.8           # text size
+  dy    <- 1.00          # inter-line spacing
+  sz    <- 4.5           # text size
 
   p <- ggplot2::ggplot(site_dt,
                         ggplot2::aes(x = LAI_S2, y = LAI_ALS)) +
@@ -192,25 +193,25 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
     ) +
     ggplot2::annotate("text",
       x = x_ann, y = y_top - dy,
+      label = paste0("RMSE = ", st$RMSE),
+      hjust = 1, vjust = 1, size = sz, colour = "black"
+    ) +
+    ggplot2::annotate("text",
+      x = x_ann, y = y_top - 2 * dy,
+      label = paste0("Bias = ", st$Bias),
+      hjust = 1, vjust = 1, size = sz, colour = "black"
+    ) +
+    ggplot2::annotate("text",
+      x = x_ann, y = y_top - 3 * dy,
       label = paste0("italic(r)~'= ", st$r, "'"),
       hjust = 1, vjust = 1, size = sz, colour = "black",
       parse = TRUE
     ) +
     ggplot2::annotate("text",
-      x = x_ann, y = y_top - 2 * dy,
+      x = x_ann, y = y_top - 4 * dy,
       label = paste0("R^2~'= ", st$R2, "'"),
       hjust = 1, vjust = 1, size = sz, colour = "black",
       parse = TRUE
-    ) +
-    ggplot2::annotate("text",
-      x = x_ann, y = y_top - 3 * dy,
-      label = paste0("RMSE = ", st$RMSE),
-      hjust = 1, vjust = 1, size = sz, colour = "black"
-    ) +
-    ggplot2::annotate("text",
-      x = x_ann, y = y_top - 4 * dy,
-      label = paste0("Bias = ", st$Bias),
-      hjust = 1, vjust = 1, size = sz, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = 14.6, y = 0.3,
@@ -235,8 +236,8 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
 
   # Inset histogram: bottom-right (55-100% x, 0-48% y of panel area)
   h <- make_hist_inset(site_name)
-  p + patchwork::inset_element(h, left = 0.54, right = 1.0,
-                                 bottom = 0.0,  top  = 0.48,
+  p + patchwork::inset_element(h, left = 0.487, right = 1.0,
+                                 bottom = 0.0,  top  = 0.513,
                                  align_to = "panel")
 }
 

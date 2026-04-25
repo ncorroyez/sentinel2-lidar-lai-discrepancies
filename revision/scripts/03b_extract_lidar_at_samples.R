@@ -27,6 +27,7 @@ library("here")
 library("terra")
 library("readr")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sentinel2_sampling.R"))
 
 # ── Global parameters — unchanged from Main_s2_02B_sample_lidar.R ─────────────
@@ -54,20 +55,20 @@ for (site in sites) {
   for (h_min in h_min_values) {
 
   # Sample locations GPKG produced by 03a
-  filename_sampling <- here::here(
-    "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
+  filename_sampling <- file.path(
+    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
     paste0("Sampling_", Samplingmethod,
            "_hmin", h_min,
            "_nbSamples_", nbSamplesS2Refl, ".GPKG")
   )
 
-  out_sampling <- here::here("03_RESULTS", site, "PROSAIL_Optimization",
-                              "sampling")
+  out_sampling <- file.path(paths$ext_results, site, "PROSAIL_Optimization",
+                             "sampling")
 
   for (norm_name in names(norm_types)) {
 
-    pad_dir <- here::here("PROSAIL-Optimization", "01_DATA", site, "LiDAR",
-                           "testPADs", norm_types[[norm_name]])
+    pad_dir <- file.path(paths$prosail_lidar, site, "LiDAR",
+                          "testPADs", norm_types[[norm_name]])
 
     # List all single-depth PAD rasters (pattern: PAD_X.5_40.tif)
     pad_files <- list.files(pad_dir,
@@ -82,7 +83,7 @@ for (site in sites) {
       )
       depth <- 40 - x_value   # effective canopy depth (m from top)
 
-      output_csv_path <- here::here(
+      output_csv_path <- file.path(
         out_sampling,
         paste0("PAD_", norm_name, "_Depth_", depth,
                "_Samples_", Samplingmethod,

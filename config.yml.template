@@ -1,0 +1,33 @@
+# ── config.yml — NC_Full project data paths ──────────────────────────────────
+#
+# Copy this file to config.yml (gitignored) and set data_root to the local
+# path where the project data is available.
+#
+# INRAE internal access (VPN or on-site):
+#   Mount the SMB share:
+#     smb://pnas3.stockage.inrae.fr/mo-mtd-pulse/root/_PROJETS/
+#            2023_2026_These_Nathan_Corroyez
+#
+#   Then set data_root to the local mount point:
+#
+#     Linux (GNOME / Nautilus — auto-mounted):
+#       /run/user/1000/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez
+#     macOS:
+#       /Volumes/2023_2026_These_Nathan_Corroyez
+#     Manual mount on Linux (sudo mount -t cifs ...):
+#       /mnt/pnas3
+#
+#   If you have a local copy of the data (e.g., Nathan's workstation):
+#       /home/corroyez/Documents/NC_Full
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Root of the data tree. All subdirectory paths below are relative to this.
+data_root: /home/corroyez/Documents/NC_Full
+
+# Subdirectory layout (change only if your local layout differs).
+dirs:
+  raw_data:      "01_DATA"                         # raw inputs (S2, LiDAR, shapefiles)
+  ext_results:   "03_RESULTS"                       # pre-processed rasters (LAI, CHM, DSM …)
+  prosail_lidar: "PROSAIL-Optimization/01_DATA"     # LiDAR point clouds for PROSAIL training
+  prosail_codes: "PROSAIL-Optimization/02_CODES"    # utility R scripts (get_s2_angles.R …)
