@@ -19,35 +19,88 @@
 #   source("revision/scripts/06_sm5_select_dopt.R")
 # ---
 
-# ── Prerequisites ──────────────────────────────────────────────────────────────
-
-sm5_csv <- here::here(
-  "revision", "output", "intermediate", "sm5",
-  "all_results_atbd_LIDFa_lai_LMA_BROWN.csv"
-)
-
-if (!file.exists(sm5_csv)) {
-  stop(
-    "SM5a ATBD CSV not found:\n  ", sm5_csv,
-    "\nRun revision/scripts/05a_sm5_compute_metrics_atbd.R first."
-  )
-}
-
-# ── Source and load ────────────────────────────────────────────────────────────
+# ── Source ─────────────────────────────────────────────────────────────────────
 
 source(here::here("revision", "R", "sm5_dopt.R"))
 
-# h_min to analyse (must match a value produced by 05_sm5_compute_metrics.R).
-# Change to 15L or 20L to run the sensitivity analysis for other thresholds.
-h_min_select <- 10L
+# ── Parameters ─────────────────────────────────────────────────────────────────
 
-metrics_dt <- data.table::fread(sm5_csv)
+sites_individual <- c("Aigoual", "Blois", "Mormal")
 
-# Filter to the selected h_min threshold
-metrics_dt <- metrics_dt[h_min == h_min_select]
+# h_min to analyse. Ignored when k_select/theta_select are non-reference
+# (05c CSV only has h_min = 10).
+h_min_select  <- 10L
 
-# Keep only keepTrees normalisation methods (DSM_keepTrees, DTM_keepTrees)
-metrics_dt <- metrics_dt[grepl("keepTrees", Norm)]
+# k_select = 0.5 and theta_select = 0 → use 05a's CSV
+# any other (k, theta)                → use 05c's kt CSV (h_min = 10 only)
+k_ref         <- 0.5
+k_select      <- 0.6
+theta_select  <- 0
+
+# "pool"    — use pooled-pixel combined row ("Sites combined")
+# "average" — compute site-averaged metrics post-hoc ("Sites averaged")
+combined_mode <- "average"
+
+# ── Load data ──────────────────────────────────────────────────────────────────
+
+use_reference <- isTRUE(k_select == k_ref && theta_select == 0)
+
+if (use_reference) {
+  sm5_csv <- here::here(
+    "revision", "output", "intermediate", "sm5",
+    "all_results_atbd_LIDFa_lai_LMA_BROWN.csv"
+  )
+  if (!file.exists(sm5_csv))
+    stop("SM5a ATBD CSV not found:\n  ", sm5_csv,
+         "\nRun revision/scripts/05a_sm5_compute_metrics_atbd.R first.")
+  metrics_dt <- data.table::fread(sm5_csv)
+  metrics_dt <- metrics_dt[h_min == h_min_select & grepl("keepTrees", Norm)]
+} else {
+  kt_csv <- here::here(
+    "revision", "output", "intermediate", "sm5",
+    "kt_sensitivity_atbd_LIDFa_lai_LMA_BROWN.csv"
+  )
+  if (!file.exists(kt_csv))
+    stop("kt CSV not found:\n  ", kt_csv,
+         "\nRun revision/scripts/05c_sm5_k_zmin_sensitivity_dopt.R first.")
+  dt_kt <- data.table::fread(kt_csv)
+  metrics_dt <- dt_kt[k == k_select & theta == theta_select &
+                        grepl("keepTrees", Norm)]
+  if (nrow(metrics_dt) == 0L)
+    stop("No rows found for k=", k_select, ", theta=", theta_select)
+  metrics_dt[, h_min := h_min_select]
+  cli::cli_alert_info(
+    "Using 05c CSV — k={k_select}, theta={theta_select}°, h_min={h_min_select}"
+  )
+}
+
+# ── Apply combined_mode ────────────────────────────────────────────────────────
+
+combined_row_names <- c("All_sites", "Sites_combined", "Sites_averaged",
+                        "Sites combined", "Sites averaged")
+dt_individual <- metrics_dt[!Site %in% combined_row_names]
+
+if (combined_mode == "average") {
+  combined_label <- "Sites averaged"
+  avg_dt <- dt_individual[Site %in% sites_individual,
+    .(R     = mean(R,     na.rm = TRUE),
+      R2    = mean(R2,    na.rm = TRUE),
+      RMSE  = mean(RMSE,  na.rm = TRUE),
+      Bias  = mean(Bias,  na.rm = TRUE),
+      Slope = mean(Slope, na.rm = TRUE),
+      ATBD  = TRUE, Column = "LAI_atbd",
+      h_min = h_min_select),
+    by = .(Norm, Depth)
+  ]
+  avg_dt[, Site := combined_label]
+  metrics_dt <- data.table::rbindlist(list(dt_individual, avg_dt),
+                                       use.names = TRUE, fill = TRUE)
+} else {
+  combined_label <- "Sites combined"
+  pool_dt <- metrics_dt[Site %in% combined_row_names][, Site := combined_label]
+  metrics_dt <- data.table::rbindlist(list(dt_individual, pool_dt),
+                                       use.names = TRUE, fill = TRUE)
+}
 
 # ── Select d_opt ───────────────────────────────────────────────────────────────
 

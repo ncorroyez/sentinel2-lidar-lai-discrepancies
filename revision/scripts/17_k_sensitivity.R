@@ -1,29 +1,33 @@
 # ---
-# title:  10_k_sensitivity.R
-# desc:   Orchestration — LAI_ALS sensitivity to extinction coefficient k.
-#         Computes how LAI_ALS descriptive statistics and LAI_S2_ATBD vs
-#         LAI_ALS comparison metrics vary with k ∈ {0.4, 0.5, 0.6}, using
-#         the analytical rescaling LAI(k_new) = LAI(k=0.5) × 0.5 / k_new
-#         (Bouvier et al. 2015). No pipeline rerun; no PROSAIL LUT retraining.
+# title:  17_k_sensitivity.R
+# desc:   Orchestration — full factorial sensitivity of LAI_ALS vs LAI_S2_ATBD
+#         to k × theta (42 combinations = 6 k values × 7 scan angles).
+#
+#         Combined rescaling (exact, no approximation):
+#           LAI_ALS(k, θ) = LAI_ALS(k_ref, 0°) × (k_ref / k) × cos(θ)
+#         where k_ref = 0.5 (Bouvier et al. 2015) and LAI_ALS(k_ref, 0°) is
+#         the integrated LAD sum from the ladstack_classic.tif raster.
 #
 #         Addresses reviewer comment R3.MAJOR.
 #         Analysis limited to: LAI_S2_ATBD vs LAI_ALS (integrated LAI),
 #         3 sites, no heterogeneity stratification, no LAI_ALS_dopt.
 #
 #         Output:
-#           revision/output/intermediate/reviewers/k_sensitivity_atbd.csv
-#           9 rows (3 sites × 3 k values), 15 columns:
-#             site, k_value, n_pixels,
+#           revision/output/intermediate/reviewers/k_theta_sensitivity_atbd.csv
+#           126 rows (3 sites × 42 combinations), 17 columns:
+#             site, k_value, theta_deg, n_pixels,
 #             lai_als_{mean,median,p95,max},
 #             lai_s2_atbd_{mean,median,p95,max},
 #             R, R2, RMSE, Bias, Slope
+#
+#         Console summary: one k × theta matrix per metric per site (15 tables).
 #
 #         Input rasters (Deciduous_Only, produced by legacy pipeline):
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/ladstack_classic.tif
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/s2lai_summer_atbd_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/10_k_sensitivity.R")
+#   source("revision/scripts/17_k_sensitivity.R")
 # ---
 
 library(here)
@@ -31,15 +35,17 @@ library(terra)
 library(data.table)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "k_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
-sites    <- c("Aigoual", "Blois", "Mormal")
-k_values <- c(0.4, 0.5, 0.6)    # extinction coefficient values to test
-k_ref    <- 0.5                  # reference k embedded in ladstack_classic.tif
+sites        <- c("Aigoual", "Blois", "Mormal")
+k_values     <- c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+k_ref        <- 0.5                   # reference k embedded in ladstack_classic.tif
+theta_values <- c(0, 5, 10, 15, 20, 25, 30)  # degrees from nadir
 
-ext_dir  <- here::here("03_RESULTS")
+ext_dir  <- paths$ext_results
 out_dir  <- here::here("revision", "output", "intermediate", "reviewers")
 
 # ── Input path helpers ─────────────────────────────────────────────────────────
@@ -98,47 +104,43 @@ if (!dir.exists(out_dir)) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 }
 
-# ── Main loop: site × k ────────────────────────────────────────────────────────
+# ── Main loop: site × k × theta (full factorial) ──────────────────────────────
 
 t0       <- proc.time()
-n_total  <- length(sites) * length(k_values)
-all_rows <- vector("list", n_total)
-row_idx  <- 0L
+all_rows <- list()
+n_combo  <- length(k_values) * length(theta_values)
 
 cli::cli_h2(
-  "k sensitivity — {n_total} combinations ",
-  "({length(sites)} sites × {length(k_values)} k values)"
+  "k × theta factorial — {length(sites)} sites × {n_combo} combinations ({length(k_values)} k × {length(theta_values)} theta)"
 )
 
 for (site in sites) {
   cli::cli_h3("Site: {site}")
-
-  # LAI_S2_ATBD is constant across k — load once per site
   lai_s2_atbd_rast <- terra::rast(s2_atbd_path(site))
 
+  # Load reference raster once per site (k_ref, theta=0°), then scale
+  lai_als_ref <- compute_lai_als_at_k(
+    ladstack_path = ladstack_path(site),
+    k_new         = k_ref,
+    k_ref         = k_ref
+  )
+
   for (k in k_values) {
-    row_idx <- row_idx + 1L
-    cli::cli_alert_info("  k = {k}")
+    for (theta in theta_values) {
+      scale_factor <- (k_ref / k) * cos(theta * pi / 180)
+      lai_als_rast <- lai_als_ref * scale_factor
 
-    lai_als_rast <- compute_lai_als_at_k(
-      ladstack_path = ladstack_path(site),
-      k_new         = k,
-      k_ref         = k_ref
-    )
-
-    all_rows[[row_idx]] <- compute_k_sensitivity_metrics(
-      lai_als_rast      = lai_als_rast,
-      lai_s2_atbd_rast  = lai_s2_atbd_rast,
-      site              = site,
-      k_value           = k
-    )
-
-    cli::cli_alert_success(
-      "    n={all_rows[[row_idx]]$n_pixels}  ",
-      "LAI_ALS_mean={round(all_rows[[row_idx]]$lai_als_mean, 3)}  ",
-      "R2={round(all_rows[[row_idx]]$R2, 3)}"
-    )
+      row <- compute_k_sensitivity_metrics(
+        lai_als_rast     = lai_als_rast,
+        lai_s2_atbd_rast = lai_s2_atbd_rast,
+        site             = site,
+        k_value          = k,
+        theta_deg        = theta
+      )
+      all_rows <- c(all_rows, list(row))
+    }
   }
+  cli::cli_alert_success("{site} done — {n_combo} combinations computed")
 }
 
 # ── Combine, reorder columns, write ───────────────────────────────────────────
@@ -146,30 +148,43 @@ for (site in sites) {
 final_dt <- data.table::rbindlist(all_rows)
 
 data.table::setcolorder(final_dt, c(
-  "site", "k_value", "n_pixels",
+  "site", "k_value", "theta_deg", "n_pixels",
   "lai_als_mean", "lai_als_median", "lai_als_p95", "lai_als_max",
   "lai_s2_atbd_mean", "lai_s2_atbd_median", "lai_s2_atbd_p95", "lai_s2_atbd_max",
   "R", "R2", "RMSE", "Bias", "Slope"
 ))
 
-out_csv <- file.path(out_dir, "k_sensitivity_atbd.csv")
+out_csv <- file.path(out_dir, "k_theta_sensitivity_atbd.csv")
 data.table::fwrite(final_dt, out_csv)
 
 elapsed <- round((proc.time() - t0)[["elapsed"]], 1)
 
 # ── Console summary ────────────────────────────────────────────────────────────
 
-cli::cli_h1("k sensitivity — résumé")
+cli::cli_h1("k × theta sensitivity — résumé")
 cli::cli_bullets(c(
   "v" = "Durée : {elapsed} s",
-  "v" = "CSV   : {out_csv}  ({nrow(final_dt)} lignes)"
+  "v" = "CSV   : {out_csv}  ({nrow(final_dt)} lignes — {length(sites)} sites × {n_combo} combos)"
 ))
-cli::cli_text("Résultats (pivot site × k) :")
-print(
-  final_dt[, .(site, k_value, n_pixels,
-               lai_als_mean = round(lai_als_mean, 3),
-               R2           = round(R2, 3),
-               RMSE         = round(RMSE, 3),
-               Bias         = round(Bias, 3),
-               Slope        = round(Slope, 3))]
-)
+
+# One k × theta matrix per metric per site
+metrics_display <- c("R", "R2", "RMSE", "Bias", "Slope")
+
+for (s in sites) {
+  cli::cli_h2("Site: {s}")
+  site_dt <- final_dt[site == s]
+
+  for (metric in metrics_display) {
+    wide <- data.table::dcast(
+      site_dt, k_value ~ paste0("theta=", theta_deg),
+      value.var = metric,
+      fun.aggregate = function(x) round(x, 3)
+    )
+    # Sort theta columns numerically
+    theta_cols <- paste0("theta=", sort(theta_values))
+    data.table::setcolorder(wide, c("k_value", theta_cols))
+
+    cat("\n  ", metric, ":\n")
+    print(wide, row.names = FALSE)
+  }
+}

@@ -129,8 +129,13 @@ read_sampling_and_estimated <- function(site, norm, depth,
 #' @param h_min           Integer. Minimum canopy height filter in metres.
 #'   Default \code{10L}. Added as a column \code{h_min} in the output.
 #' @param lai_scenario    Character. LAI source scenario for SVR training
-#'   (\code{"per_site"}, \code{"common"}, or \code{"fixed_4"}). Default
-#'   \code{"per_site"}. Added as a column \code{lai_scenario} in the output.
+#'   (\code{"per_site"} or \code{"common"}). Default \code{"per_site"}.
+#'   Added as a column \code{lai_scenario} in the output.
+#' @param lidar_scale     Numeric. Multiplicative scale applied to all LiDAR
+#'   PAD values before computing metrics. Use \code{(k_ref / k_select) *
+#'   cos(theta_select * pi / 180)} when k or scan angle differ from the
+#'   reference embedded in the PAD CSVs (k_ref = 0.5, theta = 0°). Default
+#'   \code{1} (no rescaling).
 #'
 #' @return A \code{data.table} with columns (in order):
 #'   Site, Norm, Depth, Method, h_min, lai_scenario, Column, R, R2, RMSE,
@@ -151,7 +156,8 @@ build_metrics_table <- function(
     parms2test       = c("LIDFa", "lai", "LMA", "BROWN"),
     nb_samples       = 5000L,
     h_min            = 10L,
-    lai_scenario     = "per_site") {
+    lai_scenario     = "per_site",
+    lidar_scale      = 1) {
 
   n_params  <- length(parms2test)
   all_rows  <- list()   # accumulate dt chunks; single rbindlist at the end
@@ -180,7 +186,7 @@ build_metrics_table <- function(
           s2_ids         <- seq_len(nrow(s2_dt))
           lidar_aligned  <- lidar_dt[["lidar_values"]][
             match(s2_ids, lidar_dt[["samples_id"]])
-          ]
+          ] * lidar_scale
           if (anyNA(lidar_aligned)) {
             warning("SM5: unmatched samples_id — site=", site, " norm=", norm,
                     " depth=", depth, ". Rows with NA lidar dropped.")
@@ -263,7 +269,7 @@ build_metrics_table <- function(
 
           m <- compute_metrics_s2_lidar(
             s2_vals    = vals_s2[valid],
-            lidar_vals = agg_lidar[["lidar_values"]][valid]
+            lidar_vals = agg_lidar[["lidar_values"]][valid] * lidar_scale
           )
           data.table::data.table(
             Site         = "All_sites",

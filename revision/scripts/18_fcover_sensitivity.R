@@ -48,6 +48,7 @@ library(terra)
 library(data.table)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "fcover_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ source(here::here("revision", "R", "fcover_sensitivity.R"))
 sites             <- c("Aigoual", "Blois", "Mormal")
 fcover_thresholds <- c(0.80, 0.90, 0.95)
 
-ext_dir <- here::here("03_RESULTS")
+ext_dir <- paths$ext_results
 out_dir <- here::here("revision", "output", "intermediate", "reviewers")
 
 # ── Input path helpers ─────────────────────────────────────────────────────────

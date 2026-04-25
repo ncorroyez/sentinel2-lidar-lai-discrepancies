@@ -67,6 +67,35 @@ rescale_lai_for_k <- function(lai_at_k_ref, k_ref = 0.5, k_new) {
 }
 
 
+# ── rescale_lai_for_theta ──────────────────────────────────────────────────────
+
+#' @title Rescale LAI_ALS for a given scan angle via cosine correction
+#'
+#' @description
+#' The Beer-Lambert formulation with scan angle \eqn{\theta} gives:
+#'
+#' \deqn{\text{LAI}(\theta) = \text{LAI}(\theta=0) \times \cos(\theta)}
+#'
+#' because the path length through each voxel increases as \eqn{1/\cos(\theta)},
+#' so integrating LAD over slant path and projecting back to vertical gives a
+#' factor of \eqn{\cos(\theta)}. This is an exact rescaling when \eqn{\theta}
+#' is uniform across the scene (i.e. the PAD stack was computed at nadir).
+#'
+#' @param lai_at_nadir Numeric vector or \code{SpatRaster}. LAI computed at
+#'   nadir (\eqn{\theta = 0}).
+#' @param theta_deg    Numeric. Scan angle from nadir in degrees.
+#'
+#' @return Same type as \code{lai_at_nadir}, multiplied by \eqn{\cos(\theta)}.
+#'
+#' @examples
+#' rescale_lai_for_theta(10, theta_deg = 15)  # 10 * cos(15° in rad) ≈ 9.66
+#'
+#' @export
+rescale_lai_for_theta <- function(lai_at_nadir, theta_deg) {
+  lai_at_nadir * cos(theta_deg * pi / 180)
+}
+
+
 # ── compute_lai_als_at_k ───────────────────────────────────────────────────────
 
 #' @title Compute LAI_ALS at a given extinction coefficient via rescaling
@@ -160,7 +189,7 @@ compute_lai_als_at_k <- function(ladstack_path, k_new, k_ref = 0.5) {
 #'
 #' @export
 compute_k_sensitivity_metrics <- function(lai_als_rast, lai_s2_atbd_rast,
-                                          site, k_value) {
+                                          site, k_value, theta_deg = 0) {
   lidar_raw <- as.numeric(terra::values(lai_als_rast))
   s2_raw    <- as.numeric(terra::values(lai_s2_atbd_rast))
 
@@ -197,6 +226,7 @@ compute_k_sensitivity_metrics <- function(lai_als_rast, lai_s2_atbd_rast,
   data.table::data.table(
     site             = site,
     k_value          = k_value,
+    theta_deg        = theta_deg,
     n_pixels         = n_pixels,
     lai_als_mean     = als_mean,
     lai_als_median   = als_median,

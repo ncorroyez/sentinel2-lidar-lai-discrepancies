@@ -44,6 +44,7 @@ library(terra)
 library(data.table)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sm6_load_rasters.R"))
 source(here::here("revision", "R", "sm6_dataframe.R"))
 source(here::here("revision", "R", "sm6_thresholds.R"))
@@ -85,7 +86,7 @@ if (file.exists(prosail_opt_csv)) {
 downsample_n <- NULL
 
 sm6a_dir <- here::here("revision", "output", "intermediate", "sm6")
-ext_dir  <- here::here("03_RESULTS")
+ext_dir  <- paths$ext_results
 out_dir  <- here::here("revision", "output", "intermediate", "sm6")
 
 # ── Pre-flight: verify all required input files ─────────────────────────────────

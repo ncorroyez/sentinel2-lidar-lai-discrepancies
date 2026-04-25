@@ -41,7 +41,15 @@ name_strategy    <- "LIDFa_lai_LMA_BROWN"
 parms2test       <- c("LIDFa", "lai", "LMA", "BROWN")
 nb_samples       <- 5000L
 h_min_values     <- c(10L, 15L, 20L)
-lai_scenarios    <- c("per_site", "common", "fixed_4")
+lai_scenarios    <- c("per_site", "common")
+
+# k / scan-angle rescaling — must match 07 and 09.
+# scale_factor = (k_ref / k_select) × cos(theta_select)
+# applied to PAD CSV values (which were computed at k_ref = 0.5, theta = 0°).
+k_ref        <- 0.5
+k_select     <- 0.6
+theta_select <- 0    # degrees from nadir (scan angle correction handled separately)
+scale_factor <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 
@@ -70,7 +78,8 @@ for (lai_scenario in lai_scenarios) {
         parms2test       = parms2test,
         nb_samples       = nb_samples,
         h_min            = h_min,
-        lai_scenario     = lai_scenario
+        lai_scenario     = lai_scenario,
+        lidar_scale      = scale_factor
       )
     ))
   }

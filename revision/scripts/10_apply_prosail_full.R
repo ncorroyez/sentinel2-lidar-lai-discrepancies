@@ -35,7 +35,13 @@ Samplingmethods    <- "stratified_uniform"
 name_strategy      <- "LIDFa_lai_LMA_BROWN"
 nbSamples_sampling <- 5000
 h_min_values       <- c(10L, 15L, 20L)
-lai_scenarios      <- c("per_site", "common", "fixed_4")
+
+# Scenarios produced by 07 then trained by 08:
+#   per_site — each site's own Pareto d_opt
+#   common   — combined-sites d_opt (Sites averaged or Sites combined) applied
+#              to all 3 sites
+# k_select, theta_select, combined_mode must match 06 and 07.
+lai_scenarios <- c("per_site", "common")
 
 S2BandSelect_2 <- c("B03", "B04", "B08")
 

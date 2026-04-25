@@ -52,6 +52,7 @@ library(terra)
 library(data.table)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "sm6_load_rasters_sweep.R"))
 source(here::here("revision", "R", "sm6_thresholds.R"))
 source(here::here("revision", "R", "sm6_classify.R"))
@@ -79,7 +80,7 @@ sweep_variants <- list(
 downsample_n <- NULL
 
 sm6a_dir <- here::here("revision", "output", "intermediate", "sm6")
-ext_dir  <- here::here("03_RESULTS")
+ext_dir  <- paths$ext_results
 out_dir  <- here::here("revision", "output", "intermediate", "sm6")
 
 # ── Pre-flight: verify all required input files ─────────────────────────────────

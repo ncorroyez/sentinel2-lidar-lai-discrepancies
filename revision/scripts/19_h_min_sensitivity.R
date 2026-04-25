@@ -41,6 +41,7 @@ library(terra)
 library(data.table)
 library(cli)
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "h_min_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ source(here::here("revision", "R", "h_min_sensitivity.R"))
 sites        <- c("Aigoual", "Blois", "Mormal")
 h_min_values <- c(2, 3, 4, 5)    # vegetation height thresholds to test (metres)
 
-ext_dir <- here::here("03_RESULTS")
+ext_dir <- paths$ext_results
 out_dir <- here::here("revision", "output", "intermediate", "reviewers")
 
 # ── Input path helpers ─────────────────────────────────────────────────────────
