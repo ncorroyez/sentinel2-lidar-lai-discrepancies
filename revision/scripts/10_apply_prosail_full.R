@@ -26,6 +26,7 @@ library("here")
 library("readr")
 library("cli")
 
+source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "prosail_inversion.R"))
 
 # ── Parameters ─────────────────────────────────────────────----------------------------------------------------------------
@@ -91,8 +92,23 @@ for (lai_scenario in lai_scenarios) {
 
       for (Samplingmethod in Samplingmethods) {
 
-        Sampling_path <- here::here(
-          "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
+        mean_path <- file.path(
+          models_dir,
+          paste0("LAI_estimated_", lai_scenario, "_", Samplingmethod,
+                 "_hmin", h_min, "_nbSamples_", nbSamples_sampling, ".csv")
+        )
+        sd_path <- file.path(
+          models_dir,
+          paste0("LAI_estimated_", lai_scenario, "_", Samplingmethod,
+                 "_hmin", h_min, "_nbSamples_", nbSamples_sampling, "_SD.csv")
+        )
+        if (file.exists(mean_path) && file.exists(sd_path)) {
+          cli::cli_alert_success("SKIP — {basename(mean_path)} already exists")
+          next
+        }
+
+        Sampling_path <- file.path(
+          paths$ext_results, site, "PROSAIL_Optimization", "sampling",
           paste0("S2_reflectance_", Samplingmethod,
                  "_hmin", h_min,
                  "_nbSamples_", nbSamples_sampling, ".csv")
@@ -128,17 +144,6 @@ for (lai_scenario in lai_scenarios) {
 
         names(LAI_Mean) <- combination_labels
         names(LAI_SD)   <- combination_labels
-
-        mean_path <- file.path(
-          models_dir,
-          paste0("LAI_estimated_", lai_scenario, "_", Samplingmethod,
-                 "_hmin", h_min, "_nbSamples_", nbSamples_sampling, ".csv")
-        )
-        sd_path <- file.path(
-          models_dir,
-          paste0("LAI_estimated_", lai_scenario, "_", Samplingmethod,
-                 "_hmin", h_min, "_nbSamples_", nbSamples_sampling, "_SD.csv")
-        )
 
         readr::write_delim(round(LAI_Mean, 4), mean_path, delim = "\t")
         readr::write_delim(round(LAI_SD,   4), sd_path,   delim = "\t")

@@ -62,11 +62,28 @@ out_csv <- file.path(out_dir,
 
 # ── Build table ────────────────────────────────────────────────────────────────
 
+# Load existing CSV if present; identify already-done (scenario × h_min) chunks
+if (file.exists(out_csv)) {
+  existing_dt <- data.table::fread(out_csv)
+  done_keys   <- unique(existing_dt[, paste(lai_scenario, h_min)])
+  cli::cli_alert_info(
+    "Existing CSV found: {nrow(existing_dt)} rows, {length(done_keys)} chunk(s) already done"
+  )
+} else {
+  existing_dt <- NULL
+  done_keys   <- character(0L)
+}
+
 t0 <- proc.time()
 
 chunks <- list()
 for (lai_scenario in lai_scenarios) {
   for (h_min in h_min_values) {
+    key <- paste(lai_scenario, h_min)
+    if (key %in% done_keys) {
+      cli::cli_alert_success("SKIP h_min={h_min} m | scenario={lai_scenario} (already done)")
+      next
+    }
     cli::cli_alert_info("h_min = {h_min} m | scenario = {lai_scenario}")
     chunks <- c(chunks, list(
       build_metrics_table(
@@ -84,20 +101,27 @@ for (lai_scenario in lai_scenarios) {
     ))
   }
 }
-combined <- data.table::rbindlist(chunks, use.names = TRUE)
 
 elapsed <- round((proc.time() - t0)[["elapsed"]] / 60, 1)
 
-data.table::fwrite(combined, out_csv)
-
-cli::cli_h1("SM5 full — résumé")
-cli::cli_bullets(c(
-  "v" = "Fichier écrit : {out_csv}",
-  "i" = "Lignes totales : {nrow(combined)}",
-  "i" = paste0("Sites : ",       paste(sort(unique(combined$Site)),         collapse = ", ")),
-  "i" = paste0("Norms : ",       paste(sort(unique(combined$Norm)),         collapse = ", ")),
-  "i" = paste0("h_min : ",       paste(sort(unique(combined$h_min)),        collapse = ", "), " m"),
-  "i" = paste0("Scénarios LAI : ", paste(sort(unique(combined$lai_scenario)), collapse = ", ")),
-  "i" = paste0("Profondeurs : ", min(combined$Depth), " – ", max(combined$Depth)),
-  "i" = "Durée : {elapsed} min"
-))
+if (length(chunks) == 0L) {
+  cli::cli_alert_success("All chunks already computed — nothing new to write")
+} else {
+  new_dt   <- data.table::rbindlist(chunks, use.names = TRUE)
+  combined <- data.table::rbindlist(
+    Filter(Negate(is.null), list(existing_dt, new_dt)),
+    use.names = TRUE, fill = TRUE
+  )
+  data.table::fwrite(combined, out_csv)
+  cli::cli_h1("SM5 full — résumé")
+  cli::cli_bullets(c(
+    "v" = "Fichier écrit : {out_csv}",
+    "i" = "Lignes totales : {nrow(combined)}",
+    "i" = paste0("Sites : ",       paste(sort(unique(combined$Site)),         collapse = ", ")),
+    "i" = paste0("Norms : ",       paste(sort(unique(combined$Norm)),         collapse = ", ")),
+    "i" = paste0("h_min : ",       paste(sort(unique(combined$h_min)),        collapse = ", "), " m"),
+    "i" = paste0("Scénarios LAI : ", paste(sort(unique(combined$lai_scenario)), collapse = ", ")),
+    "i" = paste0("Profondeurs : ", min(combined$Depth), " – ", max(combined$Depth)),
+    "i" = "Durée : {elapsed} min"
+  ))
+}

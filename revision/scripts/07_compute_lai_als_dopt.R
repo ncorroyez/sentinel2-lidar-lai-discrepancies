@@ -31,6 +31,8 @@ library("here")
 library("terra")
 library("data.table")
 
+source(here::here("revision", "R", "paths.R"))
+
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites         <- c("Aigoual", "Blois", "Mormal")
@@ -104,8 +106,8 @@ for (site in sites) {
 
   cat("\n── Processing site:", site, "──\n")
 
-  ladstack_path <- here::here(
-    "PROSAIL-Optimization", "01_DATA", site, "LiDAR",
+  ladstack_path <- file.path(
+    paths$prosail_lidar, site, "LiDAR",
     "PAD_Profiles_Classic", "ladstack.tif"
   )
 
@@ -126,6 +128,11 @@ for (site in sites) {
     cat("  scenario:", scenario, "| d_opt =", d_opt, "m",
         "| scale =", round(scale_factor, 4),
         "->", basename(out_tif), "\n")
+
+    if (file.exists(out_tif)) {
+      cat("    [SKIP] tif already exists\n")
+      next
+    }
 
     rast_dopt <- compute_lai_als_dopt_rast(ladstack_path, d_opt,
                                             scale = scale_factor)

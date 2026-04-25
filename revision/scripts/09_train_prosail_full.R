@@ -133,6 +133,18 @@ for (lai_scenario in lai_scenarios) {
   cat("\n══ LAI scenario:", lai_scenario, "══\n")
   t_scenario <- Sys.time()
 
+  # Skip entire scenario if all RDS already exist for all sites
+  scenario_done <- all(vapply(sites, function(s) {
+    mdir <- here::here("revision", "output", "intermediate", "PROSAIL_Models",
+                        s, name_strategy, lai_scenario)
+    all(file.exists(file.path(mdir, paste0(combination_labels, ".rds"))))
+  }, logical(1L)))
+
+  if (scenario_done) {
+    cat("  [SKIP] Scenario", lai_scenario, ": all RDS present for all sites\n")
+    next
+  }
+
   # Phase A (scenario-specific) — cross-site LAI_ALS_dopt pool
   # Provides values for the LiDAR_LAI_Best_Site_Depth variant (lai index 6).
   lai_dopt_values_all <- list()
@@ -173,14 +185,19 @@ for (lai_scenario in lai_scenarios) {
     cat("\n── Training site:", site, "| scenario:", lai_scenario, "──\n")
     t_start <- Sys.time()
 
-    models_dir <- here::here(
+    models_dir   <- here::here(
       "revision", "output", "intermediate", "PROSAIL_Models",
       site, name_strategy, lai_scenario
     )
+    filename_svr <- file.path(models_dir, paste0(combination_labels, ".rds"))
+
+    if (all(file.exists(filename_svr))) {
+      cat("  [SKIP] All RDS present for site:", site, "\n")
+      next
+    }
+
     if (!dir.exists(models_dir))
       dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
-
-    filename_svr <- file.path(models_dir, paste0(combination_labels, ".rds"))
 
     train_all_simulations(
       simulations           = simulations,
