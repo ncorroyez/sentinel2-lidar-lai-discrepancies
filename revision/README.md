@@ -86,14 +86,14 @@ Les scripts sont numérotés dans l'ordre de dépendance :
 | `05b_sm5_plot_dopt_metrics.R` | Figures métriques vs profondeur (SM5) |
 | `05c_sm5_k_zmin_sensitivity_dopt.R` | Sensibilité de d_opt à k et z_min |
 | `06_sm5_select_dopt.R` | Sélectionner d_opt par critère Pareto |
-| `07_compute_lai_als_dopt.R` | Calculer LAI_ALS_dopt (rasters) |
+| `07_compute_lai_als_dopt.R` | Calculer LAI_ALS_dopt (rasters) — **reprend si le .tif existe** |
 | `08_sm5_scatter_lai_atbd.R` | Figure scatter LAI_ALS vs LAI_S2_ATBD |
-| `09_train_prosail_full.R` | Entraîner les 270 SVR (per_site / common) |
-| `10_apply_prosail_full.R` | Appliquer les 270 SVR aux pixels S2 |
-| `11_sm5_compute_metrics_full.R` | Métriques pour toutes les configs |
+| `09_train_prosail_full.R` | Entraîner les 270 SVR (per_site / common) — **reprend au scénario/site manquant** |
+| `10_apply_prosail_full.R` | Appliquer les 270 SVR aux pixels S2 — **reprend si les CSV existent** |
+| `11_sm5_compute_metrics_full.R` | Métriques pour toutes les configs — **reprend les chunks manquants** |
 | `12_sm5_select_prosail_opt.R` | Sélectionner la config PROSAIL optimale |
 | `12b_sm5_plot_prosail_pareto.R` | Figure Pareto R² vs RMSE (config PROSAIL) |
-| `13_sm5_predict_lai_raster.R` | Prédire LAI_S2 en mode raster (config opt.) |
+| `13_sm5_predict_lai_raster.R` | Prédire LAI_S2 en mode raster — 3 scénarios : `per_site`, `common`, `fixed_4` |
 | `14_sm6_compute_heterogeneity.R` | Calculer les rasters d'hétérogénéité (SM6) |
 | `15_sm6_analysis.R` | Analyser LAI vs hétérogénéité (SM6) |
 | `16_sm6_analysis_sweep.R` | Sweep multi-échelle SM6 |
@@ -108,14 +108,33 @@ Les scripts sont numérotés dans l'ordre de dépendance :
 Le script `run_pipeline.sh` à la racine du projet enchaîne les étapes
 principales dans l'ordre correct.
 
+### Reprise sur interruption (idempotence partielle)
+
+Les scripts 07, 09, 10 et 11 détectent automatiquement les sorties déjà
+produites et les sautent :
+
+- **07** — skip par `(site × scénario)` si le `.tif` LAI_ALS_dopt existe.
+- **09** — skip scénario entier si tous les 270 RDS existent pour les 3 sites ;
+  sinon skip par site si tous les RDS du site sont présents (le pool cross-site
+  est toujours recalculé pour les sites restants).
+- **10** — skip par `(site × scénario × h_min)` si les deux CSV (mean + SD) existent.
+- **11** — charge le CSV existant au démarrage, identifie les chunks
+  `(scénario × h_min)` déjà calculés, et ne recalcule que les manquants avant
+  de réécrire le fichier fusionné.
+
+En cas d'interruption, il suffit de relancer le script ou `run_pipeline.sh` —
+les étapes terminées sont ignorées.
+
 ## Données nécessaires
 
-Les entrées (lecture seule) sont dans :
-- `01_DATA/` — données brutes (S2 SAFE, géoréférences, masques)
-- `03_RESULTS/` — résultats des pipelines précédents (réflectances S2 prétraitées,
-  PAD profiles, masques de cohérence)
-- `PROSAIL-Optimization/01_DATA/` — LAD stacks, rasters PAD par profondeur
-- `PROSAIL-Optimization/02_CODES/` — fonctions PROSAIL (get_s2_angles, etc.)
+Les entrées (lecture seule) sont résolues via `paths.R` à partir de `config.yml` :
+
+| Clé `paths` | Contenu |
+|-------------|---------|
+| `paths$raw_data` | `01_DATA/` — données brutes (S2 SAFE, géoréférences, masques) |
+| `paths$ext_results` | `03_RESULTS/` — réflectances S2 prétraitées, PAD profiles, masques |
+| `paths$prosail_lidar` | `PROSAIL-Optimization/01_DATA/` — LAD stacks, rasters PAD |
+| `paths$prosail_codes` | `PROSAIL-Optimization/02_CODES/` — fonctions PROSAIL (`get_s2_angles`, etc.) |
 
 Les sorties vont dans `revision/output/` (figures, tables, intermédiaires).
 
