@@ -71,8 +71,8 @@ combo_colours <- c(
 
 combo_labels <- c(
   ATBD_vs_ALS      = expression(LAI[S2_ATBD] ~ "vs" ~ LAI[ALS]),
-  ATBD_vs_ALS_dopt = expression(LAI[S2_ATBD] ~ "vs" ~ LAI[ALS[dopt]]),
-  opt_vs_ALS_dopt  = expression(LAI[S2_opt]  ~ "vs" ~ LAI[ALS[dopt]])
+  ATBD_vs_ALS_dopt = expression(LAI[S2_ATBD] ~ "vs" ~ LAI["ALS-dopt"]),
+  opt_vs_ALS_dopt  = expression(LAI[S2_opt]  ~ "vs" ~ LAI["ALS-dopt"])
 )
 
 # ── Pivot to long format ───────────────────────────────────────────────────────
@@ -103,6 +103,12 @@ ref_lines <- data.table::data.table(
 # ── Plot function ──────────────────────────────────────────────────────────────
 
 plot_het_grid <- function(data_ms, ms_label, base_size = 14) {
+  rmse_zero <- data.frame(
+    site   = site_levels,
+    metric = factor("RMSE~(m^2/m^2)", levels = metric_parsed_levels),
+    value  = 0
+  )
+
   ggplot2::ggplot(
     data_ms,
     ggplot2::aes(
@@ -112,6 +118,11 @@ plot_het_grid <- function(data_ms, ms_label, base_size = 14) {
       group  = combination
     )
   ) +
+    ggplot2::geom_blank(
+      data        = rmse_zero,
+      ggplot2::aes(y = value),
+      inherit.aes = FALSE
+    ) +
     ggplot2::geom_hline(
       data        = ref_lines,
       ggplot2::aes(yintercept = yintercept),
@@ -134,17 +145,14 @@ plot_het_grid <- function(data_ms, ms_label, base_size = 14) {
     ggplot2::scale_colour_manual(
       values = combo_colours,
       labels = combo_labels,
-      name   = "Comparison",
+      name   = "Relationship",
       guide  = ggplot2::guide_legend(
         override.aes = list(shape = 16, size = 3.5, linewidth = 1.1)
       )
     ) +
     ggplot2::labs(
-      x        = paste0(
-        "Heterogeneity class  (", ms_label, " SD threshold)"
-      ),
-      y        = NULL,
-      subtitle = paste0("Heterogeneity metric: ", ms_label, "_SD")
+      x = bquote("Horizontal Heterogeneity (" * .(ms_label)[SD] * ")"),
+      y = NULL
     ) +
     ggplot2::theme_bw(base_size = base_size) +
     ggplot2::theme(
