@@ -203,16 +203,17 @@ for (ms_idx in seq_along(metric_sources)) {
   cli::cli_h2("metric_source = {ms}  (column: {het_col})")
 
   # ── Calibrate thresholds ───────────────────────────────────────────────────
-  cli::cli_alert_info("Calibrating thresholds on pooled distribution ...")
+  cli::cli_alert_info("Calibrating thresholds (round_step = 0.5 m) ...")
   thr <- calibrate_thresholds(
     df                 = dt_full,
     metric_col         = het_col,
     sites              = sites,
-    target_n_per_class = 5000L
+    target_n_per_class = 5000L,
+    round_step         = 0.5
   )
   cli::cli_alert_success(
-    "Thresholds: low = {round(thr$low, 3)},  high = {round(thr$high, 3)},",
-    "  balance_score = {round(thr$balance_score, 4)}"
+    "Thresholds: low = {thr$low} m,  high = {thr$high} m",
+    "  (balance_score = {round(thr$balance_score, 4)})"
   )
   cli::cli_text("Count matrix (sites \u00d7 classes):")
   print(thr$counts)

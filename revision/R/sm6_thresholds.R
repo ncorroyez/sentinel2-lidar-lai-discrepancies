@@ -10,25 +10,27 @@
 #' @title Calibrate Low/Medium/High heterogeneity thresholds dynamically
 #'
 #' @description
-#' Searches a grid of quantile-derived threshold pairs \code{(low, high)} and
-#' selects the pair that (1) ensures a minimum pixel count in every
-#' (site × class) cell, and (2) maximises class balance on the pooled
-#' 3-site distribution.
+#' Searches a grid of threshold pairs \code{(low, high)} and selects the pair
+#' that (1) ensures a minimum pixel count in every (site × class) cell, and
+#' (2) maximises class balance on the pooled 3-site distribution.
 #'
-#' \strong{Algorithm}:
+#' \strong{Candidate grid} (controlled by \code{round_step}):
+#' \itemize{
+#'   \item If \code{round_step} is numeric (recommended): candidates are
+#'     multiples of \code{round_step} spanning the observed range of the
+#'     metric. Thresholds are therefore physically interpretable round values
+#'     (e.g. 1.0, 1.5, 2.0 m for \code{round_step = 0.5}).
+#'   \item If \code{round_step = NULL}: falls back to a quantile-derived grid
+#'     (\code{low} from quantiles 5–50\%, \code{high} from 50–95\%).
+#' }
+#'
+#' \strong{Selection algorithm}:
 #' \enumerate{
-#'   \item Build a candidate grid from quantiles of the pooled (3-site)
-#'     non-NA distribution:
-#'     \code{low_quantiles  = seq(0.05, 0.50, by = 0.01)},
-#'     \code{high_quantiles = seq(0.50, 0.95, by = 0.01)}.
-#'     Convert to absolute values via \code{stats::quantile()}. Keep only
-#'     pairs with \code{low_val < high_val} (strict).
-#'   \item For each candidate pair, classify the full data.table into
-#'     Low / Medium / High via \code{base::cut()} and compute a
-#'     \eqn{|sites| \times 3} count matrix.
+#'   \item Build candidate pairs with \code{low_val < high_val}.
+#'   \item For each pair, classify pixels into Low / Medium / High and compute
+#'     an \eqn{|sites| \times 3} count matrix.
 #'   \item Retain pairs where \code{min(counts) >= target_n_per_class} across
-#'     all (site × class) cells. If no pair qualifies, raise an informative
-#'     error asking to relax the constraint.
+#'     all (site × class) cells. Raise an error if none qualify.
 #'   \item Among qualifying pairs, select the one minimising the balance
 #'     score: \code{max(abs(pool_props - 1/3))}, where \code{pool_props} is
 #'     the 3-class proportional distribution on the pooled sample.
@@ -43,6 +45,11 @@
 #'   \code{df[["site"]]}. Determines the rows of the count matrix.
 #' @param target_n_per_class Integer. Minimum pixel count required in every
 #'   (site × class) cell. Default \code{5000L}.
+#' @param round_step Numeric or \code{NULL}. Step size for the candidate grid.
+#'   When numeric (e.g. \code{0.5}), candidates are multiples of
+#'   \code{round_step} — thresholds are physically interpretable round values.
+#'   When \code{NULL}, falls back to a quantile-derived grid. Default
+#'   \code{0.5}.
 #'
 #' @return A named list:
 #' \describe{
@@ -67,7 +74,8 @@
 #'
 #' @export
 calibrate_thresholds <- function(df, metric_col, sites,
-                                 target_n_per_class = 5000L) {
+                                 target_n_per_class = 5000L,
+                                 round_step = 0.5) {
   vals        <- df[[metric_col]]
   vals_non_na <- vals[!is.na(vals)]
 
@@ -77,11 +85,21 @@ calibrate_thresholds <- function(df, metric_col, sites,
   }
 
   # ── 1. Candidate grid ────────────────────────────────────────────────────────
-  low_q  <- seq(0.05, 0.50, by = 0.01)
-  high_q <- seq(0.50, 0.95, by = 0.01)
-
-  low_vals  <- stats::quantile(vals_non_na, probs = low_q,  names = FALSE)
-  high_vals <- stats::quantile(vals_non_na, probs = high_q, names = FALSE)
+  if (!is.null(round_step)) {
+    r     <- range(vals_non_na)
+    cands <- seq(
+      from = floor(r[1L] / round_step) * round_step,
+      to   = ceiling(r[2L] / round_step) * round_step,
+      by   = round_step
+    )
+    low_vals  <- cands
+    high_vals <- cands
+  } else {
+    low_q  <- seq(0.05, 0.50, by = 0.01)
+    high_q <- seq(0.50, 0.95, by = 0.01)
+    low_vals  <- stats::quantile(vals_non_na, probs = low_q,  names = FALSE)
+    high_vals <- stats::quantile(vals_non_na, probs = high_q, names = FALSE)
+  }
 
   grid <- expand.grid(
     low_val  = low_vals,
