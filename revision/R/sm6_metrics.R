@@ -103,7 +103,8 @@
 #'
 #' @export
 compute_metrics_by_class <- function(dt, combinations, metric_source,
-                                     downsample_n = NULL, seed = 42L) {
+                                     downsample_n = NULL, seed = 42L,
+                                     include_total = TRUE) {
   sites       <- unique(dt[["site"]])
   het_classes <- c("Low", "Medium", "High")
 
@@ -214,6 +215,68 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
         )
       }
     }
+  }
+
+  # ── Total rows: metrics over all pixels, no class filter ─────────────────
+  if (include_total) {
+    total_rows <- vector("list", length(sites) * length(combinations))
+    tidx <- 0L
+    for (site_name in sites) {
+      dt_site <- dt[site == site_name]
+      for (combo in combinations) {
+        tidx       <- tidx + 1L
+        lidar_col  <- combo$lidar_col
+        s2_col     <- combo$s2_col
+        combo_name <- combo$name
+
+        lidar_raw <- dt_site[[lidar_col]]
+        s2_raw    <- dt_site[[s2_col]]
+        complete  <- !is.na(lidar_raw) & !is.na(s2_raw)
+        lidar_vec <- lidar_raw[complete]
+        s2_vec    <- s2_raw[complete]
+        n_obs     <- length(lidar_vec)
+
+        if (n_obs < 10L) {
+          total_rows[[tidx]] <- data.table::data.table(
+            site = site_name, metric_source = metric_source,
+            combination = combo_name, het_class = "Total",
+            n = n_obs, R = NA_real_, R2 = NA_real_, RMSE = NA_real_,
+            Bias = NA_real_, Bias_pvalue = NA_real_,
+            Slope = NA_real_, Slope_pvalue = NA_real_
+          )
+          next
+        }
+
+        r_val     <- stats::cor(lidar_vec, s2_vec, use = "complete.obs")
+        rmse_val  <- sqrt(mean((lidar_vec - s2_vec)^2, na.rm = TRUE))
+        diff_vec  <- s2_vec - lidar_vec
+        bias_val  <- mean(diff_vec, na.rm = TRUE)
+        bias_p    <- stats::t.test(diff_vec)$p.value
+        lm_fit    <- stats::lm(s2_vec ~ lidar_vec)
+        slope_val <- stats::coef(lm_fit)[2L]
+        se_slope  <- summary(lm_fit)$coefficients[2L, 2L]
+        t_stat    <- (slope_val - 1) / se_slope
+        slope_p   <- 2 * stats::pt(abs(t_stat),
+                                   df         = stats::df.residual(lm_fit),
+                                   lower.tail = FALSE)
+
+        total_rows[[tidx]] <- data.table::data.table(
+          site          = site_name,
+          metric_source = metric_source,
+          combination   = combo_name,
+          het_class     = "Total",
+          n             = n_obs,
+          R             = r_val,
+          R2            = r_val ^ 2,
+          RMSE          = rmse_val,
+          Bias          = bias_val,
+          Bias_pvalue   = bias_p,
+          Slope         = slope_val,
+          Slope_pvalue  = slope_p
+        )
+      }
+    }
+    rows <- c(rows, total_rows)
   }
 
   data.table::rbindlist(rows)

@@ -49,7 +49,7 @@ cli::cli_alert_success(
 
 # ── Factor levels ──────────────────────────────────────────────────────────────
 
-het_levels   <- c("Low", "Medium", "High")
+het_levels   <- c("Low", "Medium", "High", "Total")
 combo_levels <- c("ATBD_vs_ALS", "ATBD_vs_ALS_dopt", "opt_vs_ALS_dopt")
 site_levels  <- c("Aigoual", "Blois", "Mormal")
 
@@ -71,8 +71,8 @@ combo_colours <- c(
 
 combo_labels <- c(
   ATBD_vs_ALS      = expression(LAI[S2_ATBD] ~ "vs" ~ LAI[ALS]),
-  ATBD_vs_ALS_dopt = expression(LAI[S2_ATBD] ~ "vs" ~ LAI["ALS-dopt"]),
-  opt_vs_ALS_dopt  = expression(LAI[S2_opt]  ~ "vs" ~ LAI["ALS-dopt"])
+  ATBD_vs_ALS_dopt = expression(LAI[S2_ATBD] ~ "vs" ~ LAI["ALS_dopt"]),
+  opt_vs_ALS_dopt  = expression(LAI[S2_opt]  ~ "vs" ~ LAI["ALS_dopt"])
 )
 
 # ── Pivot to long format ───────────────────────────────────────────────────────
@@ -109,6 +109,14 @@ plot_het_grid <- function(data_ms, ms_label, base_size = 14) {
     value  = 0
   )
 
+  # Split normal classes vs Total
+  normal_dt <- data_ms[het_class != "Total"]
+  total_dt  <- data_ms[het_class == "Total"]
+
+  # Jitter Total stars per combination around x = 4 (position of "Total")
+  x_offsets <- setNames(c(-0.2, 0.0, 0.2), combo_levels)
+  total_dt[, x_num := 4 + x_offsets[as.character(combination)]]
+
   ggplot2::ggplot(
     data_ms,
     ggplot2::aes(
@@ -131,8 +139,17 @@ plot_het_grid <- function(data_ms, ms_label, base_size = 14) {
       linewidth   = 0.45,
       inherit.aes = FALSE
     ) +
-    ggplot2::geom_line(linewidth = 1.1, na.rm = TRUE) +
-    ggplot2::geom_point(size = 3.0, shape = 16, na.rm = TRUE) +
+    ggplot2::geom_line(data = normal_dt, linewidth = 1.1, na.rm = TRUE) +
+    ggplot2::geom_point(data = normal_dt, size = 3.0, shape = 16, na.rm = TRUE) +
+    ggplot2::geom_point(
+      data        = total_dt,
+      ggplot2::aes(x = x_num, y = value, colour = combination),
+      shape       = 8,
+      size        = 3.5,
+      stroke      = 1.5,
+      inherit.aes = FALSE,
+      na.rm       = TRUE
+    ) +
     ggplot2::facet_grid(
       metric ~ site,
       scales   = "free_y",

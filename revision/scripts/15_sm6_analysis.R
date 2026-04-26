@@ -261,7 +261,7 @@ for (ms_idx in seq_along(metric_sources)) {
 
 final_dt <- data.table::rbindlist(all_metrics)
 
-# Expected 3 sites × 2 metric_sources × 3 combos × 3 classes = 54 rows
+# Expected 3 sites × 2 metric_sources × 3 combos × (3 classes + 1 Total) = 72 rows
 # (rows with n < 10 are present but have NA metrics)
 cli::cli_alert_info("Final table: {nrow(final_dt)} rows")
 
