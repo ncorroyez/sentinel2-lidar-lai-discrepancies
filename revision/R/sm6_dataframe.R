@@ -101,14 +101,17 @@ build_pixel_dt <- function(rasters, site_name) {
 #' }
 #'
 #' @export
-build_multisite_dt <- function(sites, dopt_by_site = 4, sm6a_dir, ext_dir) {
+build_multisite_dt <- function(sites, dopt_by_site = 4, sm6a_dir, ext_dir,
+                               lai_s2_opt_paths = NULL) {
   dt_list <- vector("list", length(sites))
   names(dt_list) <- sites
 
   for (site in sites) {
-    d_val <- if (length(dopt_by_site) == 1L) dopt_by_site else dopt_by_site[[site]]
+    d_val    <- if (length(dopt_by_site) == 1L) dopt_by_site else dopt_by_site[[site]]
+    opt_path <- if (!is.null(lai_s2_opt_paths)) lai_s2_opt_paths[[site]] else NULL
     cli::cli_alert_info("Loading rasters for site: {site} (d_opt = {d_val} m)")
-    r               <- load_site_rasters(site, d_val, sm6a_dir, ext_dir)
+    r               <- load_site_rasters(site, d_val, sm6a_dir, ext_dir,
+                                         lai_s2_opt_path = opt_path)
     dt_list[[site]] <- build_pixel_dt(r, site)
     cli::cli_alert_success("  {site}: {nrow(dt_list[[site]])} pixels loaded")
   }

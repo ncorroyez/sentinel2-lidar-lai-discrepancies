@@ -53,18 +53,29 @@ source(here::here("revision", "R", "sm6_metrics.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
-sites          <- c("Aigoual", "Blois", "Mormal")
-norm_ref       <- "DSM_keepTrees"   # norm used for d_opt and LAI_S2_opt selection
-canopy_max_m   <- 40                # fixed canopy height ceiling used in PAD naming
-metric_sources <- c("DSM", "CHM")
+sites                <- c("Aigoual", "Blois", "Mormal")
+norm_ref             <- "DSM_keepTrees"
+canopy_max_m         <- 40
+metric_sources       <- c("DSM")
+d_opt_source_select  <- "all_sites"  # "per_site", "all_sites", or "fixed_4"
+
+# S2 opt raster filename produced by script 13 for each d_opt_source
+s2_opt_fn <- switch(
+  d_opt_source_select,
+  per_site  = "s2lai_summer_opt_per_site_res_10_m.tif",
+  all_sites = "s2lai_summer_opt_common_res_10_m.tif",
+  fixed_4   = "s2lai_summer_opt_fixed_4_res_10_m.tif",
+  stop("Unknown d_opt_source_select: ", d_opt_source_select)
+)
 
 # ── Site-specific d_opt from SM5 passe 2 (prosail_opt.csv) ────────────────────
 prosail_opt_csv <- here::here(
   "revision", "output", "intermediate", "sm5", "prosail_opt.csv"
 )
 if (file.exists(prosail_opt_csv)) {
-  prosail_opt <- data.table::fread(prosail_opt_csv)
-  opt_ref     <- prosail_opt[Norm == norm_ref & Site %in% sites]
+  prosail_opt  <- data.table::fread(prosail_opt_csv)
+  opt_ref      <- prosail_opt[Norm == norm_ref & Site %in% sites &
+                               d_opt_source == d_opt_source_select]
   dopt_by_site <- setNames(opt_ref$d_opt, opt_ref$Site)
   cli::cli_alert_info(
     "d_opt loaded from prosail_opt.csv (norm = {norm_ref}): ",
@@ -130,12 +141,12 @@ for (site in sites) {
   )
 
   # S2 opt raster: SM5 passe 3 preferred, legacy fallback tolerated
-  opt_path    <- file.path(base_sm6a, "s2lai_summer_opt_res_10_m.tif")
+  opt_path    <- file.path(base_sm6a, s2_opt_fn)
   legacy_path <- file.path(base_ext, "s2lai_summer_best_indiv_res_10_m.tif")
   required_files[[paste0(site, "_s2_opt")]] <- list(
     path     = if (file.exists(opt_path)) opt_path else legacy_path,
     producer = if (file.exists(opt_path))
-      "produced by SM5 passe 3 (06c_sm5_predict_lai_raster.R)"
+      paste0("produced by script 13 (", s2_opt_fn, ")")
     else
       "produced by 3_train_predict_prosail.R (legacy fallback)"
   )
@@ -174,11 +185,14 @@ if (!dir.exists(out_dir)) {
 
 cli::cli_h2("Building multi-site pixel data.table")
 
+lai_s2_opt_paths <- setNames(file.path(sm6a_dir, sites, s2_opt_fn), sites)
+
 dt_full <- build_multisite_dt(
-  sites        = sites,
-  dopt_by_site = dopt_by_site,
-  sm6a_dir     = sm6a_dir,
-  ext_dir      = ext_dir
+  sites            = sites,
+  dopt_by_site     = dopt_by_site,
+  sm6a_dir         = sm6a_dir,
+  ext_dir          = ext_dir,
+  lai_s2_opt_paths = lai_s2_opt_paths
 )
 
 cli::cli_alert_info(
