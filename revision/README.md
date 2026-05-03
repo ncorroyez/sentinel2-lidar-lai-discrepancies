@@ -1,152 +1,171 @@
 # Révision — LiDAR × Sentinel-2 LAI (Corroyez et al., RSE)
 
-Ce dossier contient tout le code refactorisé et les analyses additionnelles
-produites pour la révision majeure du manuscrit RSE-D-25-04417.
+Code refactorisé et analyses additionnelles pour la révision majeure du
+manuscrit RSE-D-25-04417.
 
-## Structure
+---
+
+## Lancer le pipeline
+
+### Option A — en une ligne depuis R
+
+```r
+source("revision/scripts/00_run_all.R")
+```
+
+### Option B — via le launcher `.RData`
+
+```r
+# Générer le launcher une seule fois (ou après modification de pipeline_launcher.R) :
+source("revision/pipeline_launcher.R")
+
+# Lors de chaque session R :
+load(here::here("pipeline.RData"))
+
+run_all()            # pipeline complet (~3–6 h)
+run_dopt()           # Phase 2 seulement (d_opt + figures)
+run_sensitivity()    # Phase 5 seulement
+pipeline_help()      # liste des phases disponibles
+```
+
+---
+
+## Structure du dossier
 
 ```
 revision/
-  R/              fonctions (une thématique par fichier)
-  scripts/        orchestration numérotée (01… → 20…)
-  output/
-    figures/      figures produites (sm5/, sm6/, scan_angle/, …)
-    tables/       tableaux CSV
-    intermediate/ résultats intermédiaires (RDS, CSV lourds — gitignorés)
-  reviewers/      commentaires reviewers, notes de réponse
-  tests/          tests unitaires
+├── pipeline_launcher.R     génère pipeline.RData (launcher interactif)
+├── R/                      fonctions R (une thématique par fichier)
+├── scripts/
+│   ├── 00_run_all.R        orchestration maître — source les 9 phases
+│   ├── 01_prepare.R        Phase 1 : SVR ATBD + échantillonnage S2 + PAD
+│   ├── 02_dopt_compute.R   Phase 2 : métriques ATBD + sélection d_opt + rasters
+│   ├── 02_dopt_figures.R   Phase 2 : figures r vs profondeur + scatter
+│   ├── 03_prosail_compute.R Phase 3 : 270 SVR + LAI_S2_opt + rasters ATBD
+│   ├── 03_prosail_figures.R Phase 3 : figures Pareto + param + validation ATBD
+│   ├── 04_het_compute.R    Phase 4 : DSM_sd/CHM_sd + régression SM6
+│   ├── 04_het_figures.R    Phase 4 : figures hétérogénéité + profils PAD
+│   ├── 05_sensitivity.R    Phase 5 : sensibilités k, fCover, h_min, joint
+│   ├── 05_sensitivity_figures.R  Phase 5 : figures de sensibilité
+│   ├── steps/              scripts constitutifs (détail d'implémentation)
+│   └── archive/            scripts non-pipeline (téléchargements S2, scan angle)
+├── output/
+│   ├── figures/            figures produites (sm5/, sm6/, reviewers/, …)
+│   ├── tables/             tableaux CSV finaux
+│   └── intermediate/       résultats intermédiaires (gitignorés)
+├── reviewers/              commentaires reviewers + notes de réponse
+└── tests/                  tests unitaires
 ```
 
-## Configuration des chemins (collaborateurs)
+---
 
-Les données brutes et résultats externes sont sur le partage INRAE :
-`smb://pnas3.stockage.inrae.fr/mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez/`
+## Configuration initiale
 
-### 1. Monter le partage SMB
-
-**Linux (GNOME/Nautilus)** : ouvrir Nautilus → Connexion à un serveur →
-`smb://pnas3.stockage.inrae.fr/mo-mtd-pulse` → identifiants LDAP INRAE.
-Le point de montage sera de la forme :
-`/run/user/<uid>/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/`
-
-**macOS** : Finder → Aller → Se connecter au serveur →
-`smb://pnas3.stockage.inrae.fr/mo-mtd-pulse` → identifiants LDAP INRAE.
-Le partage apparaît dans `/Volumes/mo-mtd-pulse/`.
-
-### 2. Créer `config.yml` à la racine du projet
-
-Copier le modèle et ajuster le chemin :
+### 1. Créer `config.yml`
 
 ```bash
 cp config.yml.template config.yml
 ```
 
-Éditer `config.yml` pour pointer vers le dossier projet sur le partage monté,
-par exemple :
+Choisir le profil dans `config.yml` :
 
 ```yaml
-# Linux
-data_root: /run/user/1234/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez/NC_Full
-
-# macOS
-data_root: /Volumes/mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez/NC_Full
+profile: local   # données dans revision/data/  (défaut)
+# profile: smb   # données sur le serveur INRAE partagé
 ```
 
 Le fichier `config.yml` est dans `.gitignore` — ne jamais le committer.
 
-### 3. Vérifier les chemins
+### 2. Profil `local` — données en local
 
-En R, depuis la racine du projet :
+Les données sont dans `revision/data/` (non versionnées, lourdes).
+Peupler ce dossier via `bash sync_to_smb.sh --outputs` depuis le serveur,
+ou copier manuellement depuis `03_RESULTS/`, `01_DATA/`, `PROSAIL-Optimization/01_DATA/`.
+
+### 3. Profil `smb` — serveur INRAE partagé
+
+**Linux (GNOME/Nautilus)** : Connexion à un serveur →
+`smb://pnas3.stockage.inrae.fr/mo-mtd-pulse` → identifiants LDAP INRAE.
+Point de montage : `/run/user/<uid>/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/`
+
+**macOS (Finder)** : Aller → Se connecter au serveur →
+`smb://pnas3.stockage.inrae.fr/mo-mtd-pulse`.
+Point de montage : `/Volumes/mo-mtd-pulse/`
+
+Adapter l'UID dans `config.yml` si nécessaire (Linux : `id -u`).
+
+### 4. Vérifier les chemins
 
 ```r
 source("revision/R/paths.R")
 str(paths)
-# doit afficher les chemins résolus vers 01_DATA/, 03_RESULTS/, etc.
-file.exists(paths$raw_data)   # TRUE si le partage est monté
+file.exists(paths$raw_data)    # TRUE si données accessibles
 ```
 
-**Fallback** : si `config.yml` est absent, `paths.R` utilise `here::here()`
-(racine du projet local). Nathan peut donc lancer les scripts sans `config.yml`
-si les données sont présentes localement.
+---
 
-## Ordre d'exécution du pipeline
+## Synchronisation SMB ↔ local
 
-Les scripts sont numérotés dans l'ordre de dépendance :
+```bash
+bash sync_to_smb.sh            # tout (entrées + sorties)
+bash sync_to_smb.sh --inputs   # données d'entrée seulement (~3 Go)
+bash sync_to_smb.sh --outputs  # sorties revision/output/ seulement
+```
 
-| Script | Rôle |
-|--------|------|
-| `01a_download_s2_from_safe.R` | Extraire réflectances S2 depuis archives SAFE |
-| `01b_download_s2_from_cdse.R` | Télécharger S2 depuis CDSE (alternative) |
-| `02a_train_prosail_atbd.R` | Entraîner SVR ATBD (1 config × 3 sites) |
-| `02_dryrun_train_prosail.R` | Dry run — valider l'API et estimer les temps |
-| `03a_sample_s2_pixels.R` | Échantillonner les pixels S2 (stratified uniform) |
-| `03b_extract_lidar_at_samples.R` | Extraire PAD LiDAR aux positions d'échantillons |
-| `04a_apply_prosail_atbd.R` | Appliquer le SVR ATBD aux échantillons |
-| `05a_sm5_compute_metrics_atbd.R` | Calculer les métriques ATBD par profondeur |
-| `05b_sm5_plot_dopt_metrics.R` | Figures métriques vs profondeur (SM5) |
-| `05c_sm5_k_zmin_sensitivity_dopt.R` | Sensibilité de d_opt à k et z_min |
-| `06_sm5_select_dopt.R` | Sélectionner d_opt par critère Pareto |
-| `07_compute_lai_als_dopt.R` | Calculer LAI_ALS_dopt (rasters) — **reprend si le .tif existe** |
-| `08_sm5_scatter_lai_atbd.R` | Figure scatter LAI_ALS vs LAI_S2_ATBD |
-| `09_train_prosail_full.R` | Entraîner les 270 SVR (per_site / common) — **reprend au scénario/site manquant** |
-| `10_apply_prosail_full.R` | Appliquer les 270 SVR aux pixels S2 — **reprend si les CSV existent** |
-| `11_sm5_compute_metrics_full.R` | Métriques pour toutes les configs — **reprend les chunks manquants** |
-| `12_sm5_select_prosail_opt.R` | Sélectionner la config PROSAIL optimale |
-| `12b_sm5_plot_prosail_pareto.R` | Figure Pareto R² vs RMSE (config PROSAIL) |
-| `13_sm5_predict_lai_raster.R` | Prédire LAI_S2 en mode raster — 3 scénarios : `per_site`, `common`, `fixed_4` |
-| `14_sm6_compute_heterogeneity.R` | Calculer les rasters d'hétérogénéité (SM6) |
-| `15_sm6_analysis.R` | Analyser LAI vs hétérogénéité (SM6) |
-| `16_sm6_analysis_sweep.R` | Sweep multi-échelle SM6 |
-| `17_k_sensitivity.R` | Sensibilité LAI_ALS au coefficient k |
-| `18_fcover_sensitivity.R` | Sensibilité au seuil fCover |
-| `18_scan_angle_correction.R` | Correction angle de visée (complet) |
-| `18a_scan_angle_tiles.R` | Correction par tuile LAS |
-| `18b_scan_angle_finalize.R` | Finaliser la correction (mosaïque) |
-| `19_h_min_sensitivity.R` | Sensibilité au seuil h_min |
-| `20_sm6_plot_heterogeneity.R` | Figures hétérogénéité (SM6) |
+Le script ne synchronise que les sous-dossiers nécessaires au pipeline
+(pas les 113 Go complets).
 
-Le script `run_pipeline.sh` à la racine du projet enchaîne les étapes
-principales dans l'ordre correct.
+---
 
-### Reprise sur interruption (idempotence partielle)
+## Phases du pipeline
 
-Les scripts 07, 09, 10 et 11 détectent automatiquement les sorties déjà
-produites et les sautent :
+| Script | Durée approx. | Rôle |
+|--------|--------------|------|
+| `01_prepare.R` | ~30 min | SVR ATBD, échantillonnage S2, extraction PAD LiDAR |
+| `02_dopt_compute.R` | ~5 min | Métriques ATBD × profondeur, sélection d_opt Pareto, rasters LAI_ALS_dopt |
+| `02_dopt_figures.R` | ~2 min | Figures r vs profondeur (SM5), scatter LAI_ALS vs LAI_S2 |
+| `03_prosail_compute.R` | ~3–5 h | 270 SVR PROSAIL × 2 scénarios, métriques, sélection Pareto, rasters LAI_S2_opt + ATBD_T/F |
+| `03_prosail_figures.R` | ~3 min | Pareto front, distributions paramètres, validation ATBD |
+| `04_het_compute.R` | ~10 min | DSM_sd, CHM_sd, régression SM6b, sweep configurations |
+| `04_het_figures.R` | ~5 min | Figures hétérogénéité, scatter densité, histogrammes S2, profils PAD |
+| `05_sensitivity.R` | ~15 min | Sensibilités k, fCover ∈ {80,90,95 %}, h_min ∈ {2,3,4,5} m, joint |
+| `05_sensitivity_figures.R` | ~3 min | Figures de sensibilité (réponse reviewers R3, R4) |
 
-- **07** — skip par `(site × scénario)` si le `.tif` LAI_ALS_dopt existe.
-- **09** — skip scénario entier si tous les 270 RDS existent pour les 3 sites ;
-  sinon skip par site si tous les RDS du site sont présents (le pool cross-site
-  est toujours recalculé pour les sites restants).
-- **10** — skip par `(site × scénario × h_min)` si les deux CSV (mean + SD) existent.
-- **11** — charge le CSV existant au démarrage, identifie les chunks
-  `(scénario × h_min)` déjà calculés, et ne recalcule que les manquants avant
-  de réécrire le fichier fusionné.
+Exclusions de `run_all()` (lancer manuellement si nécessaire) :
+- `archive/01a_download_s2_from_safe.R` — extraction réflectances S2 depuis SAFE
+- `archive/01b_download_s2_from_cdse.R` — téléchargement S2 via CDSE
+- `archive/18_scan_angle_*` — correction angle de visée (nécessite les LAS sur SMB)
 
-En cas d'interruption, il suffit de relancer le script ou `run_pipeline.sh` —
-les étapes terminées sont ignorées.
+---
 
-## Données nécessaires
+## Chemins exposés par `paths.R`
 
-Les entrées (lecture seule) sont résolues via `paths.R` à partir de `config.yml` :
+| Variable | Profil `local` | Profil `smb` |
+|----------|---------------|-------------|
+| `paths$raw_data` | `revision/data/raw/` | `01_DATA/` |
+| `paths$ext_results` | `revision/data/results/` | `03_RESULTS/` |
+| `paths$prosail_lidar` | `revision/data/prosail_lidar/` | `PROSAIL-Optimization/01_DATA/` |
+| `paths$prosail_codes` | `PROSAIL-Optimization/02_CODES/` | `PROSAIL-Optimization/02_CODES/` |
+| `paths$output` | `revision/output/` | `revision/output/` |
 
-| Clé `paths` | Contenu |
-|-------------|---------|
-| `paths$raw_data` | `01_DATA/` — données brutes (S2 SAFE, géoréférences, masques) |
-| `paths$ext_results` | `03_RESULTS/` — réflectances S2 prétraitées, PAD profiles, masques |
-| `paths$prosail_lidar` | `PROSAIL-Optimization/01_DATA/` — LAD stacks, rasters PAD |
-| `paths$prosail_codes` | `PROSAIL-Optimization/02_CODES/` — fonctions PROSAIL (`get_s2_angles`, etc.) |
-
-Les sorties vont dans `revision/output/` (figures, tables, intermédiaires).
+---
 
 ## Packages R requis
 
 ```r
 install.packages(c(
-  "here", "terra", "sf", "lidR",
+  "here", "terra", "sf", "sgsR", "dplyr",
   "prosail", "prospect",
   "data.table", "readr",
   "ggplot2", "patchwork", "scales",
-  "cli", "yaml", "sgsR", "dplyr",
-  "e1071"   # SVR via prosail
+  "cli", "yaml",
+  "e1071"
 ))
 ```
+
+---
+
+## Qualité des figures
+
+Toutes les figures sont sauvegardées en **PDF** (`device = cairo_pdf`) et
+**PNG 600 dpi** (`bg = "white"`).

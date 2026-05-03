@@ -174,9 +174,9 @@ p <- ggplot2::ggplot(
 out_pdf <- file.path(out_dir, "s2_atbd_validation_heatmap.pdf")
 out_png <- file.path(out_dir, "s2_atbd_validation_heatmap.png")
 
-ggplot2::ggsave(out_pdf, p, width = 10, height = 10, units = "in")
+ggplot2::ggsave(out_pdf, p, width = 10, height = 10, units = "in", device = cairo_pdf)
 ggplot2::ggsave(out_png, p, width = 10, height = 10, units = "in",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 
 cli::cli_alert_success("Written: {out_pdf}")
 cli::cli_alert_success("Written: {out_png}")

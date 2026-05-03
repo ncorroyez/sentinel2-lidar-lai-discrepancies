@@ -135,9 +135,9 @@ w_cm <- 28
 h_cm <- 14
 
 ggplot2::ggsave(file.path(out_dir, "sm_fcover_hmin_combined.pdf"),
-                fig, width = w_cm, height = h_cm, units = "cm")
+                fig, width = w_cm, height = h_cm, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(file.path(out_dir, "sm_fcover_hmin_combined.png"),
-                fig, width = w_cm, height = h_cm, units = "cm", dpi = 300)
+                fig, width = w_cm, height = h_cm, units = "cm", dpi = 600, bg = "white")
 
 cli::cli_alert_success(
   "Saved sm_fcover_hmin_combined.pdf/png ({w_cm}×{h_cm} cm)"

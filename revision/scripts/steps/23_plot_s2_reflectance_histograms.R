@@ -160,9 +160,9 @@ out_pdf <- file.path(out_dir, "s2_reflectance_histograms.pdf")
 out_png <- file.path(out_dir, "s2_reflectance_histograms.png")
 
 ggplot2::ggsave(out_pdf, fig, width = 16, height = 18, units = "in",
-                bg = "white")
+                bg = "white", device = cairo_pdf)
 ggplot2::ggsave(out_png, fig, width = 16, height = 18, units = "in",
-                device = "png", dpi = 300, bg = "white")
+                device = "png", dpi = 600, bg = "white")
 
 cli::cli_alert_success("Written: {out_pdf}")
 cli::cli_alert_success("Written: {out_png}")

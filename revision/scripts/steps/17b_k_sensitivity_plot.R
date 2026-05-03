@@ -180,9 +180,9 @@ h_cm <- 10
 out_pdf <- file.path(out_dir, "sm_k_sensitivity.pdf")
 out_png <- file.path(out_dir, "sm_k_sensitivity.png")
 
-ggplot2::ggsave(out_pdf, p, width = w_cm, height = h_cm, units = "cm")
+ggplot2::ggsave(out_pdf, p, width = w_cm, height = h_cm, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(out_png, p, width = w_cm, height = h_cm, units = "cm",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 
 cli::cli_alert_success("Written: {out_pdf}")
 cli::cli_alert_success("Written: {out_png}")

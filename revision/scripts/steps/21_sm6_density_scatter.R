@@ -223,10 +223,10 @@ for (s in sites) {
 
   out_base <- file.path(out_dir, paste0("density_scatter_", s))
   ggplot2::ggsave(paste0(out_base, ".pdf"), p,
-                  width = 30, height = 22, units = "cm")
+                  width = 30, height = 22, units = "cm", device = cairo_pdf)
   ggplot2::ggsave(paste0(out_base, ".png"), p,
                   width = 30, height = 22, units = "cm",
-                  device = "png", dpi = 300)
+                  device = "png", dpi = 600, bg = "white")
   cli::cli_alert_success("Written: density_scatter_{s}.pdf / .png")
 }
 

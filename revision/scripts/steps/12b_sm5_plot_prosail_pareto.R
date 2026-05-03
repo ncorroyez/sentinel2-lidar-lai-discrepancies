@@ -336,10 +336,10 @@ out_pdf <- file.path(out_dir, "prosail_pareto_DSM.pdf")
 out_png <- file.path(out_dir, "prosail_pareto_DSM.png")
 
 ggplot2::ggsave(out_pdf, fig,
-                width = 30, height = h_cm, units = "cm")
+                width = 30, height = h_cm, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(out_png, fig,
                 width = 30, height = h_cm, units = "cm",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 
 cli::cli_alert_success("Written: {out_pdf}")
 cli::cli_alert_success("Written: {out_png}")
@@ -560,9 +560,9 @@ fig_box <- (plots_box[[1L]] | plots_box[[2L]]) /
 out_box_pdf <- file.path(out_dir, "prosail_front1_metrics_DSM.pdf")
 out_box_png <- file.path(out_dir, "prosail_front1_metrics_DSM.png")
 ggplot2::ggsave(out_box_pdf, fig_box,
-                width = 22, height = 20, units = "cm")
+                width = 22, height = 20, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(out_box_png, fig_box,
-                width = 22, height = 20, units = "cm", device = "png", dpi = 300)
+                width = 22, height = 20, units = "cm", device = "png", dpi = 600, bg = "white")
 cli::cli_alert_success("Written: {out_box_pdf}")
 cli::cli_alert_success("Written: {out_box_png}")
 
@@ -708,9 +708,9 @@ fig_freq <- ggplot2::ggplot(
 out_freq_pdf <- file.path(out_dir, "prosail_front1_params_DSM.pdf")
 out_freq_png <- file.path(out_dir, "prosail_front1_params_DSM.png")
 ggplot2::ggsave(out_freq_pdf, fig_freq,
-                width = 28, height = 20, units = "cm")
+                width = 28, height = 20, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(out_freq_png, fig_freq,
-                width = 28, height = 20, units = "cm", device = "png", dpi = 300)
+                width = 28, height = 20, units = "cm", device = "png", dpi = 600, bg = "white")
 cli::cli_alert_success("Written: {out_freq_pdf}")
 cli::cli_alert_success("Written: {out_freq_png}")
 

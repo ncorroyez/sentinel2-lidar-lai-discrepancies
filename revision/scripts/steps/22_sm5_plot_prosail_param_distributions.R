@@ -331,9 +331,9 @@ fig <- (p_lai | p_other) +
 out_pdf <- file.path(out_dir, "sm_prosail_param_distribs.pdf")
 out_png <- file.path(out_dir, "sm_prosail_param_distribs.png")
 
-ggplot2::ggsave(out_pdf, fig, width = 30, height = 22, units = "cm")
+ggplot2::ggsave(out_pdf, fig, width = 30, height = 22, units = "cm", device = cairo_pdf)
 ggplot2::ggsave(out_png, fig, width = 30, height = 22, units = "cm",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 
 cli::cli_alert_success("Written: {out_pdf}")
 cli::cli_alert_success("Written: {out_png}")

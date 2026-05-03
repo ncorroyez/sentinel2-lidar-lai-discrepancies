@@ -201,9 +201,9 @@ for (ms in c("DSM", "CHM")) {
   out_pdf <- file.path(out_dir, paste0("het_metrics_grid_", ms, ".pdf"))
   out_png <- file.path(out_dir, paste0("het_metrics_grid_", ms, ".png"))
 
-  ggplot2::ggsave(out_pdf, p_ms, width = 26, height = 22, units = "cm")
+  ggplot2::ggsave(out_pdf, p_ms, width = 26, height = 22, units = "cm", device = cairo_pdf)
   ggplot2::ggsave(out_png, p_ms, width = 26, height = 22, units = "cm",
-                  device = "png", dpi = 300)
+                  device = "png", dpi = 600, bg = "white")
 
   cli::cli_alert_success("Written: {out_pdf}")
   cli::cli_alert_success("Written: {out_png}")

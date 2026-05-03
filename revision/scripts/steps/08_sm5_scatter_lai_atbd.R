@@ -261,6 +261,6 @@ if (!dir.exists(out_dir))
 
 out_file <- file.path(out_dir, "scatter_LAI_ALS_vs_S2_ATBD.png")
 ggplot2::ggsave(out_file, fig, width = 30, height = 12, units = "cm",
-                 device = "png", dpi = 300)
+                 device = "png", dpi = 600, bg = "white")
 cli::cli_alert_success("Written: {out_file}")
 cat("Done.\n")

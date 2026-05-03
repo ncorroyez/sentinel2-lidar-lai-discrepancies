@@ -404,7 +404,7 @@ p_R_fig <- make_metric_figure(
 )
 
 out_r <- file.path(out_dir, "dopt_R_ATBD.pdf")
-ggplot2::ggsave(out_r, p_R_fig, width = 28, height = 18, units = "cm")
+ggplot2::ggsave(out_r, p_R_fig, width = 28, height = 18, units = "cm", device = cairo_pdf)
 cat("  Written:", out_r, "\n")
 
 # ── Figure 5 — h_min = 10 m only ──────────────────────────────────────────────
@@ -597,7 +597,7 @@ p_pareto_10 <- p_pareto_10 +
 
 out_pareto10 <- file.path(out_dir, "dopt_Pareto_ATBD_hmin10.png")
 ggplot2::ggsave(out_pareto10, p_pareto_10, width = 24, height = 12, units = "cm",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 cat("  Written:", out_pareto10, "\n")
 
 # ── Per-metric figures — h_min = 10 m, with all/uniform/random reference lines ─
@@ -633,7 +633,7 @@ for (spec in metrics_ref) {
   )
   out10 <- file.path(out_dir, paste0("dopt_", spec$file, "_ATBD_hmin10.png"))
   ggplot2::ggsave(out10, fig10, width = 24, height = 12, units = "cm",
-                  device = "png", dpi = 300)
+                  device = "png", dpi = 600, bg = "white")
   cat("  Written:", out10, "\n")
 }
 
@@ -658,7 +658,7 @@ for (spec in metrics_spec) {
     fade_redundancy = TRUE
   )
   out_file <- file.path(out_dir, paste0("dopt_metric_", spec$file, "_ATBD.pdf"))
-  ggplot2::ggsave(out_file, fig, width = 28, height = 18, units = "cm")
+  ggplot2::ggsave(out_file, fig, width = 28, height = 18, units = "cm", device = cairo_pdf)
   cat("  Written:", out_file, "\n")
 }
 
@@ -733,7 +733,7 @@ p_sm1 <- make_metric_figure(
 
 out_sm1 <- file.path(out_dir, "sm_dopt_pareto_all_hmin.png")
 ggplot2::ggsave(out_sm1, p_sm1, width = 32, height = 22, units = "cm",
-                device = "png", dpi = 300)
+                device = "png", dpi = 600, bg = "white")
 cat("  Written:", out_sm1, "\n")
 
 # ── SM Appendix Figure 2: facet_grid(metric × site), légende unifiée ──────────
@@ -927,8 +927,8 @@ if (nrow(arrow_long_sm2) > 0L) {
 out_sm2     <- file.path(out_dir, "sm_dopt_4metrics_hmin10.png")
 out_sm2_pdf <- file.path(out_dir, "sm_dopt_4metrics_hmin10.pdf")
 ggplot2::ggsave(out_sm2,     fig_sm2, width = 30, height = 30, units = "cm",
-                device = "png", dpi = 300)
-ggplot2::ggsave(out_sm2_pdf, fig_sm2, width = 30, height = 30, units = "cm")
+                device = "png", dpi = 600, bg = "white")
+ggplot2::ggsave(out_sm2_pdf, fig_sm2, width = 30, height = 30, units = "cm", device = cairo_pdf)
 cat("  Written:", out_sm2, "\n")
 cat("  Written:", out_sm2_pdf, "\n")
 
@@ -1061,8 +1061,8 @@ for (norm_i in norms_select) {
 out_sm2b     <- file.path(out_dir, "sm_dopt_4metrics_hmin10_combined.png")
 out_sm2b_pdf <- file.path(out_dir, "sm_dopt_4metrics_hmin10_combined.pdf")
 ggplot2::ggsave(out_sm2b,     fig_sm2_comb, width = 30, height = 30, units = "cm",
-                device = "png", dpi = 300)
-ggplot2::ggsave(out_sm2b_pdf, fig_sm2_comb, width = 30, height = 30, units = "cm")
+                device = "png", dpi = 600, bg = "white")
+ggplot2::ggsave(out_sm2b_pdf, fig_sm2_comb, width = 30, height = 30, units = "cm", device = cairo_pdf)
 cat("  Written:", out_sm2b, "\n")
 cat("  Written:", out_sm2b_pdf, "\n")
 

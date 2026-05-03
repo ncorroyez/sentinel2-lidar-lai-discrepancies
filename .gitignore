@@ -38,6 +38,10 @@ ENV/
 # Revision workflow — keep code, ignore heavy intermediates
 # =============================================================
 revision/output/intermediate/
+revision/data/
+
+# User-specific data path configuration (copy from config.yml.template)
+config.yml
 
 # =============================================================
 # R
@@ -46,6 +50,7 @@ revision/output/intermediate/
 .Rapp.history
 .RData
 .Ruserdata
+pipeline.RData
 .Rproj.user/
 *.Rproj
 /cache/

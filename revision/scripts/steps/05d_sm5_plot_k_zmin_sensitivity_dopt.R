@@ -97,12 +97,12 @@ w_heat <- 26; h_heat <- 10
 
 ggplot2::ggsave(
   file.path(out_dir, "sm_dopt_k_theta_heatmap.pdf"),
-  p_heat, width = w_heat, height = h_heat, units = "cm"
+  p_heat, width = w_heat, height = h_heat, units = "cm", device = cairo_pdf
 )
 ggplot2::ggsave(
   file.path(out_dir, "sm_dopt_k_theta_heatmap.png"),
   p_heat, width = w_heat, height = h_heat, units = "cm",
-  device = "png", dpi = 300
+  device = "png", dpi = 600, bg = "white"
 )
 cli::cli_alert_success("Written: sm_dopt_k_theta_heatmap.pdf / .png")
 
@@ -148,12 +148,12 @@ w_zmin <- 12; h_zmin <- 10
 
 ggplot2::ggsave(
   file.path(out_dir, "sm_dopt_zmin.pdf"),
-  p_zmin, width = w_zmin, height = h_zmin, units = "cm"
+  p_zmin, width = w_zmin, height = h_zmin, units = "cm", device = cairo_pdf
 )
 ggplot2::ggsave(
   file.path(out_dir, "sm_dopt_zmin.png"),
   p_zmin, width = w_zmin, height = h_zmin, units = "cm",
-  device = "png", dpi = 300
+  device = "png", dpi = 600, bg = "white"
 )
 cli::cli_alert_success("Written: sm_dopt_zmin.pdf / .png")
 
