@@ -32,7 +32,7 @@ sites <- c("Aigoual", "Blois", "Mormal")
 l2a_ids <- c(
   Aigoual = "L2A_T31TEJ_A031608_20210711T104217",
   Blois   = "L2A_T31TCN_A031222_20210614T105443",
-  Mormal  = "L2A_T31UDR_A031222_20210614T105443"
+  Mormal  = "L2A_T31UER_A031222_20210614T105443"
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -103,10 +103,18 @@ for (site in sites) {
     file.path(dst_results, site, "PROSAIL_Optimization", l2a)
   )
 
-  # Metrics/Deciduous_Only — LAI, CHM, S2 rasters for figures
+  # Metrics/Deciduous_Only — only the specific files needed by the pipeline
+  # (not the full directory which contains ~8 GB of legacy outputs)
+  dec_only_src <- file.path(paths$ext_results, site, "Metrics", "Deciduous_Only")
+  dec_only_dst <- file.path(dst_results, site, "Metrics", "Deciduous_Only")
+  for (tif in c("lidarlai_res_10_m.tif", "max_res_10_m.tif",
+                "ladstack_classic.tif", "fCover_res_10_m.tif")) {
+    cp_file(file.path(dec_only_src, tif), dec_only_dst)
+  }
+  # PAD profiles (DSM variant) — used by sm6_load_rasters for PAD figures
   cp_dir(
-    file.path(paths$ext_results, site, "Metrics", "Deciduous_Only"),
-    file.path(dst_results, site, "Metrics", "Deciduous_Only")
+    file.path(dec_only_src, "PAD_Profiles_dsm_keepTrees"),
+    file.path(dec_only_dst, "PAD_Profiles_dsm_keepTrees")
   )
 
   # LiDAR/dsm — 1 m DSM for heterogeneity (VRT + underlying tiles)
