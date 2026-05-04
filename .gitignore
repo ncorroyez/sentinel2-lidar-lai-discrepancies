@@ -50,7 +50,6 @@ config.yml
 .Rapp.history
 .RData
 .Ruserdata
-pipeline.RData
 .Rproj.user/
 *.Rproj
 /cache/

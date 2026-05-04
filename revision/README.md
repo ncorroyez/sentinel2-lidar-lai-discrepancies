@@ -7,25 +7,8 @@ manuscrit RSE-D-25-04417.
 
 ## Lancer le pipeline
 
-### Option A — en une ligne depuis R
-
 ```r
 source("revision/scripts/00_run_all.R")
-```
-
-### Option B — via le launcher `.RData`
-
-```r
-# Générer le launcher une seule fois (ou après modification de pipeline_launcher.R) :
-source("revision/pipeline_launcher.R")
-
-# Lors de chaque session R :
-load(here::here("pipeline.RData"))
-
-run_all()            # pipeline complet (~3–6 h)
-run_dopt()           # Phase 2 seulement (d_opt + figures)
-run_sensitivity()    # Phase 5 seulement
-pipeline_help()      # liste des phases disponibles
 ```
 
 ---
@@ -34,7 +17,6 @@ pipeline_help()      # liste des phases disponibles
 
 ```
 revision/
-├── pipeline_launcher.R     génère pipeline.RData (launcher interactif)
 ├── R/                      fonctions R (une thématique par fichier)
 ├── scripts/
 │   ├── 00_run_all.R        orchestration maître — source les 9 phases
