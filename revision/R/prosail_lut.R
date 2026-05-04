@@ -344,12 +344,7 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #'
 #' **LiDAR LAI sampling**: \code{lidar_lai_rast} and \code{lidar_lai_site_rast}
 #' must be pre-extracted numeric vectors (use \code{terra::values(rast, na.rm=TRUE)}
-#' in the calling script). \code{lidar_lai_common_rast} and
-#' \code{lidar_lai_3m_rast} may be passed as \code{SpatRaster} objects;
-#' \code{terra::values()} is called inside this function. For the standard
-#' 270-combination grid \code{("LIDFa","lai","LMA","BROWN")}, only
-#' \code{LiDAR_LAI} and \code{LiDAR_LAI_Best_Site_Depth} are active; the other
-#' two variants are dead code retained for forward compatibility.
+#' in the calling script).
 #'
 #' This function is a faithful refactor of
 #' \code{PROSAIL_train_sensitivity_subset()} from
@@ -367,12 +362,6 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #'   from the full LAD stack raster (\code{terra::values(sum(rast(...)), na.rm=TRUE)}).
 #' @param lidar_lai_site_rast Numeric vector. Pre-extracted non-NA LAI values
 #'   from the site-best-depth raster.
-#' @param lidar_lai_common_rast \code{SpatRaster} or \code{NULL}. LAI raster for
-#'   the common-best-depth variant. Values extracted internally. Dead code for
-#'   the standard grid.
-#' @param lidar_lai_3m_rast   \code{SpatRaster} or \code{NULL}. LAI raster for
-#'   the 3 m threshold variant. Values extracted internally. Dead code for the
-#'   standard grid.
 #' @param geom_s2             Named list with elements \code{MinAngle} and
 #'   \code{MaxAngle}, each a named numeric vector with fields \code{vza},
 #'   \code{sza}, \code{psi} (Sentinel-2 geometry of acquisition).
@@ -390,8 +379,6 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 train_one_simulation <- function(simuset, filename, combinations,
                                   lidar_lai_rast,
                                   lidar_lai_site_rast,
-                                  lidar_lai_common_rast,
-                                  lidar_lai_3m_rast,
                                   geom_s2,
                                   nbSamples    = 5000,
                                   p            = NULL,
@@ -456,16 +443,6 @@ train_one_simulation <- function(simuset, filename, combinations,
         } else if (valparm["distribution"] == "LiDAR_LAI_Best_Site_Depth") {
           # lidar_lai_site_rast is a pre-extracted numeric vector (terra::values())
           distparm <- sample(lidar_lai_site_rast, size = nrow(input_prosail))
-        } else if (valparm["distribution"] == "LiDAR_LAI_Best_Common_Depth") {
-          distparm <- sample(
-            terra::values(lidar_lai_common_rast, na.rm = TRUE),
-            size = nrow(input_prosail)
-          )
-        } else if (valparm["distribution"] == "LiDAR_LAI_3m?") {
-          distparm <- sample(
-            terra::values(lidar_lai_3m_rast, na.rm = TRUE),
-            size = nrow(input_prosail)
-          )
         }
         input_prosail[[col_name]] <- distparm
       }
@@ -495,11 +472,7 @@ train_one_simulation <- function(simuset, filename, combinations,
 #' \code{simulations$grid_simu}).
 #'
 #' This function is a faithful refactor of \code{PROSAIL_train_sensitivity()}
-#' from \code{PROSAIL-Optimization/02_CODES/libraries/}. The refactored version
-#' additionally forwards \code{lidar_lai_common_rast} and
-#' \code{lidar_lai_3m_rast} to the worker for forward compatibility (they are
-#' dead code for the standard 270-combination grid but present in the original
-#' function signature).
+#' from \code{PROSAIL-Optimization/02_CODES/libraries/}.
 #'
 #' @details
 #' **Sequential mode** (\code{nbCPU = 1}): the simulation grid is split into
@@ -520,10 +493,6 @@ train_one_simulation <- function(simuset, filename, combinations,
 #'   na.rm=TRUE)} in the calling script). Passed to \code{train_one_simulation()}.
 #' @param lidar_lai_site_rast Numeric vector or \code{NULL}. Pre-extracted LAI
 #'   values from the site-best-depth raster.
-#' @param lidar_lai_common_rast \code{SpatRaster} or \code{NULL}. Dead code for
-#'   standard grid; retained for forward compatibility.
-#' @param lidar_lai_3m_rast   \code{SpatRaster} or \code{NULL}. Dead code for
-#'   standard grid; retained for forward compatibility.
 #' @param nbSamples           Integer. Number of LUT samples per model.
 #'   Default 2000.
 #' @param filename            Character vector, length equal to
@@ -558,11 +527,9 @@ train_one_simulation <- function(simuset, filename, combinations,
 #' @export
 train_all_simulations <- function(simulations,
                                    geom_s2,
-                                   lidar_lai_rast        = NULL,
-                                   lidar_lai_site_rast   = NULL,
-                                   lidar_lai_common_rast = NULL,
-                                   lidar_lai_3m_rast     = NULL,
-                                   nbSamples             = 5000,
+                                   lidar_lai_rast      = NULL,
+                                   lidar_lai_site_rast = NULL,
+                                   nbSamples           = 2000,
                                    filename,
                                    nbCPU                 = 1,
                                    S2BandSelect          = c("B3", "B4", "B8")) {
@@ -578,14 +545,12 @@ train_all_simulations <- function(simulations,
                                            f = seq(nb_split)))
 
   more_args <- list(
-    combinations          = simulations$combination,
-    lidar_lai_rast        = lidar_lai_rast,
-    lidar_lai_site_rast   = lidar_lai_site_rast,
-    lidar_lai_common_rast = lidar_lai_common_rast,
-    lidar_lai_3m_rast     = lidar_lai_3m_rast,
-    geom_s2               = geom_s2,
-    S2BandSelect          = S2BandSelect,
-    nbSamples             = nbSamples
+    combinations        = simulations$combination,
+    lidar_lai_rast      = lidar_lai_rast,
+    lidar_lai_site_rast = lidar_lai_site_rast,
+    geom_s2             = geom_s2,
+    S2BandSelect        = S2BandSelect,
+    nbSamples           = nbSamples
   )
 
   if (nbCPU == 1L) {

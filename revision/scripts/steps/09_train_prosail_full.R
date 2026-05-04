@@ -193,16 +193,14 @@ for (lai_scenario in lai_scenarios) {
       dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
 
     train_all_simulations(
-      simulations           = simulations,
-      geom_s2               = geom_s2[[site]],
-      lidar_lai_rast        = lai_values_vec,       # full-canopy pool (variant 5)
-      lidar_lai_site_rast   = lai_dopt_values_vec,  # d_opt pool (variant 6)
-      lidar_lai_common_rast = NULL,
-      lidar_lai_3m_rast     = NULL,
-      nbSamples             = nbSamples_train,
-      filename              = filename_svr,
-      nbCPU                 = nbCPU,
-      S2BandSelect          = S2BandSelect
+      simulations         = simulations,
+      geom_s2             = geom_s2[[site]],
+      lidar_lai_rast      = lai_values_vec,      # full-canopy pool (variant 5)
+      lidar_lai_site_rast = lai_dopt_values_vec, # d_opt pool (variant 6)
+      nbSamples           = nbSamples_train,
+      filename            = filename_svr,
+      nbCPU               = nbCPU,
+      S2BandSelect        = S2BandSelect
     )
 
     elapsed_site <- round(difftime(Sys.time(), t_start, units = "mins"), 1)
