@@ -69,7 +69,9 @@ pad_filename <- function(dopt_value, canopy_max_m = 40) {
 #'     \code{X} and \code{Y} are derived via \code{pad_filename(dopt_value)}.
 #'     Single-layer.
 #'   \item \strong{lai_s2_atbd}: Sentinel-2 LAI from the ATBD
-#'     parametrisation (\code{s2lai_summer_atbd_res_10_m.tif}). Single-layer.
+#'     parametrisation. Loaded from \code{sm6a_dir/{site}/s2lai_summer_atbd_T_res_10_m.tif}
+#'     (prosail 3.0.0, script 25) if present; falls back to the legacy v2 raster
+#'     \code{ext_dir/{site}/Metrics/Deciduous_Only/s2lai_summer_atbd_res_10_m.tif}.
 #'   \item \strong{lai_s2_opt}: Sentinel-2 LAI from the site-optimal
 #'     per-site parametrisation
 #'     (\code{s2lai_summer_best_indiv_res_10_m.tif}). Single-layer.
@@ -154,9 +156,12 @@ load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir,
   lai_als_dopt <- terra::rast(pad_path)
 
   # ── S2 rasters (single-layer each) ───────────────────────────────────────────
-  lai_s2_atbd <- terra::rast(
-    file.path(dec_only, "s2lai_summer_atbd_res_10_m.tif")
-  )
+  # prosail 3.0.0 ATBD_T raster produced by script 25 — no legacy fallback.
+  atbd_path <- file.path(sm6a_dir, site, "s2lai_summer_atbd_T_res_10_m.tif")
+  if (!file.exists(atbd_path))
+    stop("load_site_rasters: ATBD_T raster missing for '", site, "':\n  ",
+         atbd_path, "\nRun revision/scripts/25_train_apply_prosail_atbd_rasters.R first.")
+  lai_s2_atbd <- terra::rast(atbd_path)
   # lai_s2_opt: SM5 passe 3 output preferred; fallback to legacy if absent.
   if (is.null(lai_s2_opt_path)) {
     lai_s2_opt_path <- file.path(sm6a_dir, site, "s2lai_summer_opt_res_10_m.tif")

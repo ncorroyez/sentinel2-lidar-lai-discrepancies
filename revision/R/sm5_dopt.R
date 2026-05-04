@@ -20,7 +20,7 @@
 #' Euclidean distance to the utopian point in a four-dimensional normalised
 #' criterion space. The four criteria to minimise are:
 #' \describe{
-#'   \item{m1}{\code{1 - R2} (high R² is desirable)}
+#'   \item{m1}{\code{1 - R} (high Pearson r is desirable)}
 #'   \item{m2}{\code{RMSE}}
 #'   \item{m3}{\code{abs(Bias)}}
 #'   \item{m4}{\code{abs(Slope - 1)}}
@@ -82,7 +82,7 @@ compute_pareto_front <- function(metrics_subset) {
   depths <- metrics_subset[["Depth"]]
 
   # Four criteria to minimise — literal specification
-  m1 <- 1 - metrics_subset[["R2"]]           # m1 = 1 - R2
+  m1 <- 1 - metrics_subset[["R"]]            # m1 = 1 - r (Pearson r)
   m2 <- metrics_subset[["RMSE"]]             # m2 = RMSE
   m3 <- abs(metrics_subset[["Bias"]])        # m3 = abs(Bias)
   m4 <- abs(metrics_subset[["Slope"]] - 1)  # m4 = abs(Slope - 1)
@@ -306,7 +306,7 @@ select_prosail_opt <- function(metrics_dt,
 
     pf <- compute_pareto_front(data.table::data.table(
       Depth = sub_pf[["tmp_depth"]],
-      R2    = sub_pf[["R2"]],
+      R     = sub_pf[["R"]],
       RMSE  = sub_pf[["RMSE"]],
       Bias  = sub_pf[["Bias"]],
       Slope = sub_pf[["Slope"]]

@@ -146,8 +146,9 @@ apply_svr_to_reflectance <- function(svr_ensemble, reflectance_matrix) {
 #' @export
 predict_lai_full_raster <- function(svr_ensemble, s2_raster,
                                     band_prefixes = c("B03", "B04", "B08"),
-                                    mask_rast = NULL,
-                                    dn_scale  = 10000) {
+                                    mask_rast  = NULL,
+                                    dn_scale   = 10000,
+                                    chunk_size = 100000L) {
   # Select bands by prefix
   band_idx <- which(Reduce(`|`, lapply(band_prefixes, startsWith, x = names(s2_raster))))
   if (length(band_idx) != length(band_prefixes)) {
@@ -161,16 +162,24 @@ predict_lai_full_raster <- function(svr_ensemble, s2_raster,
   s2_sel <- s2_raster[[band_idx]]
 
   # Extract all pixel values: matrix (npix × nbands)
-  vals      <- terra::values(s2_sel) / dn_scale
-  valid     <- stats::complete.cases(vals)
+  vals  <- terra::values(s2_sel) / dn_scale
+  valid <- stats::complete.cases(vals)
 
-  preds        <- rep(NA_real_, nrow(vals))
+  preds <- rep(NA_real_, nrow(vals))
   if (any(valid)) {
-    result       <- prosail::prosail_hybrid_apply(
-      regression_models = svr_ensemble,
-      refl              = as.matrix(vals[valid, , drop = FALSE])
-    )
-    preds[valid] <- result$mean_estimate
+    valid_idx <- which(valid)
+    n_valid   <- length(valid_idx)
+    n_chunks  <- ceiling(n_valid / chunk_size)
+    for (chunk in seq_len(n_chunks)) {
+      start <- (chunk - 1L) * chunk_size + 1L
+      end   <- min(chunk * chunk_size, n_valid)
+      idx   <- valid_idx[start:end]
+      result <- prosail::prosail_hybrid_apply(
+        regression_models = svr_ensemble,
+        refl              = as.matrix(vals[idx, , drop = FALSE])
+      )
+      preds[idx] <- result$mean_estimate
+    }
   }
 
   # Write predictions back into a single-layer raster template

@@ -143,10 +143,10 @@ load_site_rasters_sweep <- function(site, dopt_value = 4, sweep_variants,
       file.path(dec_only, "PAD_Profiles_dsm_keepTrees", pad_fn)
     ),
     lai_s2_atbd  = terra::rast(
-      file.path(dec_only, "s2lai_summer_atbd_res_10_m.tif")
+      file.path(sm6a_dir, site, "s2lai_summer_atbd_T_res_10_m.tif")
     ),
     lai_s2_opt   = terra::rast(
-      file.path(dec_only, "s2lai_summer_best_indiv_res_10_m.tif")
+      file.path(sm6a_dir, site, "s2lai_summer_opt_common_res_10_m.tif")
     ),
     max_height   = terra::rast(
       file.path(dec_only, "max_res_10_m.tif")

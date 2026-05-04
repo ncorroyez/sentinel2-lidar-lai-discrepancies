@@ -72,8 +72,8 @@ read_sampling_and_estimated <- function(site, norm, depth,
                                          sampling_method, name_strategy,
                                          nb_samples, h_min = 10L,
                                          lai_scenario = "per_site") {
-  lidar_csv <- here::here(
-    "03_RESULTS", site, "PROSAIL_Optimization", "sampling",
+  lidar_csv <- file.path(
+    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
     paste0("PAD_", norm, "_Depth_", depth,
            "_Samples_", sampling_method,
            "_hmin", h_min,
