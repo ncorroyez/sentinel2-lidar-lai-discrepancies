@@ -19,7 +19,7 @@ library("here")
 
 source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "prosail_lut.R"))
-source(file.path(paths$prosail_codes, "libraries", "get_s2_angles.R"))
+source(here::here("revision", "R", "get_s2_angles.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 

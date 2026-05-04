@@ -13,6 +13,22 @@ source("revision/scripts/00_run_all.R")
 
 ---
 
+## Reproduire le pipeline sans accès au serveur INRAE
+
+1. Cloner le code depuis GitHub
+2. Obtenir le bundle de données (`revision/data.zip`) et l'extraire dans `revision/data/`
+3. Copier `config.yml.template` en `config.yml` et choisir `profile: local`
+4. Ajuster `data_root` et `output_root` dans le bloc `local` de `config.yml`
+5. `source("revision/scripts/00_run_all.R")` (~3–6 h)
+
+Le bundle est généré depuis le serveur INRAE avec :
+
+```r
+source("revision/bundle_inputs.R")  # nécessite SMB monté
+```
+
+---
+
 ## Structure du dossier
 
 ```

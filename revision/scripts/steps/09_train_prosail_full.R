@@ -34,7 +34,7 @@ library("progressr")
 
 source(here::here("revision", "R", "paths.R"))
 source(here::here("revision", "R", "prosail_lut.R"))
-source(file.path(paths$prosail_codes, "libraries", "get_s2_angles.R"))
+source(here::here("revision", "R", "get_s2_angles.R"))
 
 # global = TRUE propagates the handler into nested with_progress() calls
 # (e.g. the one inside train_all_simulations in prosail_lut.R)
