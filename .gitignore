@@ -2,6 +2,7 @@
 # Data and heavy outputs — NEVER version
 # =============================================================
 01_DATA/
+02_CODES/
 03_RESULTS/
 04_FIGURES/
 paper1_Figures/
@@ -41,12 +42,21 @@ output/
 data/
 
 # reviewers/ is internal-only (manuscript drafts, reviewer DOCX).
-# Only reviewers_comments.md is tracked.
-reviewers/*
-!reviewers/reviewers_comments.md
+reviewers/
 
-# User-specific data path configuration (copy from config.yml.template)
+# User-specific data path configuration
 config.yml
+config.yml.template
+
+# Local-only / not part of public pipeline distribution
+CLAUDE.md
+INVENTORY.md
+README_LEGACY.md
+bundle_inputs.R
+setup.R
+run_pipeline.sh
+sync_to_revision.sh
+lidar-s2-lai-discrepancies/
 
 # =============================================================
 # R
