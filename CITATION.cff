@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite both the article and the archived code."
-title: "LiDAR x Sentinel-2 LAI inter-sensor consistency — companion code"
+title: "Assessing and Reducing Discrepancies Between Sentinel-2 and LiDAR-Derived LAI in Temperate Deciduous Forests — companion code"
 authors:
   - family-names: "Corroyez"
     given-names: "Nathan"
@@ -11,8 +11,8 @@ authors:
   #   orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"
 type: software
 license: MIT
-repository-code: "https://github.com/<owner>/<repo>"
-url: "https://github.com/<owner>/<repo>"
+repository-code: "https://github.com/ncorroyez/sentinel2-lidar-lai-discrepancies"
+url: "https://github.com/ncorroyez/sentinel2-lidar-lai-discrepancies"
 version: "1.0.0"
 date-released: 2026-06-08
 keywords:
@@ -26,7 +26,7 @@ keywords:
   - remote sensing
 preferred-citation:
   type: article
-  title: "<final article title once accepted>"
+  title: "Assessing and Reducing Discrepancies Between Sentinel-2 and LiDAR-Derived LAI in Temperate Deciduous Forests"
   authors:
     - family-names: "Corroyez"
       given-names: "Nathan"

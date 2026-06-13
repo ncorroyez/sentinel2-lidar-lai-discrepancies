@@ -56,6 +56,8 @@ bundle_inputs.R
 setup.R
 run_pipeline.sh
 sync_to_revision.sh
+sync_to_smb.sh
+sync_inputs_to_smb.sh
 lidar-s2-lai-discrepancies/
 
 # =============================================================
