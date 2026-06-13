@@ -8,15 +8,15 @@
 #               Dot-plot: x = z_min, y = d_opt, one coloured line per site.
 #
 #         Reads (output of 05c):
-#           revision/output/intermediate/sm5/dopt_k_theta_sensitivity.csv
-#           revision/output/intermediate/sm5/dopt_zmin_sensitivity.csv
+#           output/intermediate/sm5/dopt_k_theta_sensitivity.csv
+#           output/intermediate/sm5/dopt_zmin_sensitivity.csv
 #
 #         Outputs:
-#           revision/output/figures/reviewers/sm_dopt_k_theta_heatmap.pdf/.png
-#           revision/output/figures/reviewers/sm_dopt_zmin.pdf/.png
+#           output/figures/sm_dopt_k_theta_heatmap.pdf/.png
+#           output/figures/sm_dopt_zmin.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/05d_sm5_plot_k_zmin_sensitivity_dopt.R")
+#   source("scripts/05d_sm5_plot_k_zmin_sensitivity_dopt.R")
 # ---
 
 library(here)
@@ -24,18 +24,20 @@ library(data.table)
 library(ggplot2)
 library(cli)
 
+source(here::here("R", "paths.R"))
+
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
 kt_csv   <- file.path(paths$output, "intermediate", "sm5",
                         "dopt_k_theta_sensitivity.csv")
 zmin_csv <- file.path(paths$output, "intermediate", "sm5",
                         "dopt_zmin_sensitivity.csv")
-out_dir  <- file.path(paths$output, "figures", "reviewers")
+out_dir  <- file.path(paths$output, "figures")
 
 if (!file.exists(kt_csv))
-  stop("Missing: ", kt_csv, "\nRun revision/scripts/05c first.")
+  stop("Missing: ", kt_csv, "\nRun scripts/05c first.")
 if (!file.exists(zmin_csv))
-  stop("Missing: ", zmin_csv, "\nRun revision/scripts/05c first.")
+  stop("Missing: ", zmin_csv, "\nRun scripts/05c first.")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 dopt_kt   <- data.table::fread(kt_csv)
@@ -45,7 +47,12 @@ cli::cli_alert_success("Loaded kt: {nrow(dopt_kt)} rows, zmin: {nrow(dopt_zmin)}
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites        <- c("Aigoual", "Blois", "Mormal")
-site_colours <- c(Aigoual = "#1b7837", Blois = "#762a83", Mormal = "#d6604d")
+# Combined-site row label written by script 05c (matches combined_mode
+# from script 06). Both underscore and space variants are accepted.
+combined_label_candidates <- c("Sites_averaged", "Sites averaged",
+                               "Sites_combined", "Sites combined")
+site_colours <- c(Aigoual = "#1b7837", Blois = "#762a83", Mormal = "#d6604d",
+                  `Sites averaged` = "grey25")
 norm_sel     <- "DSM_keepTrees"
 
 theme_pub <- ggplot2::theme_bw(base_size = 12) +
@@ -58,8 +65,16 @@ theme_pub <- ggplot2::theme_bw(base_size = 12) +
 
 # ── Figure A: k × theta → d_opt heatmap ───────────────────────────────────────
 
-kt_sub <- dopt_kt[Site %in% sites & Norm == norm_sel]
-kt_sub[, site  := factor(Site,  levels = sites)]
+# Include the combined-site row in the heatmap (4th panel). Normalise its
+# label to "Sites averaged" for consistency across plots.
+kt_present_combined <- intersect(combined_label_candidates, unique(dopt_kt$Site))
+if (length(kt_present_combined) > 0L) {
+  combined_in_csv <- kt_present_combined[[1L]]
+  dopt_kt[Site == combined_in_csv, Site := "Sites averaged"]
+}
+sites_plot <- c(sites, "Sites averaged")
+kt_sub <- dopt_kt[Site %in% sites_plot & Norm == norm_sel]
+kt_sub[, site  := factor(Site,  levels = sites_plot)]
 kt_sub[, theta := factor(theta, levels = sort(unique(theta)))]
 
 # d_opt as factor for discrete colour scale
@@ -83,14 +98,16 @@ p_heat <- ggplot2::ggplot(
   ) +
   ggplot2::scale_x_continuous(
     name   = expression(italic(k) ~ (extinction ~ coefficient)),
-    breaks = sort(unique(kt_sub$k))
+    breaks = sort(unique(kt_sub$k)),
+    labels = function(x) sub("^0", "", sprintf("%.2f", x))
   ) +
   ggplot2::scale_y_discrete(
     name = expression(theta ~ (scan ~ angle ~ deg))
   ) +
   theme_pub +
   ggplot2::theme(
-    legend.title = ggplot2::element_text(size = 10)
+    legend.title = ggplot2::element_text(size = 10),
+    axis.text.x  = ggplot2::element_text(angle = 45, hjust = 1)
   )
 
 w_heat <- 26; h_heat <- 10
@@ -108,8 +125,13 @@ cli::cli_alert_success("Written: sm_dopt_k_theta_heatmap.pdf / .png")
 
 # ── Figure B: z_min → d_opt dot-line plot ──────────────────────────────────────
 
-zmin_sub <- dopt_zmin[Site %in% sites & Norm == norm_sel]
-zmin_sub[, site  := factor(Site, levels = sites)]
+zmin_present_combined <- intersect(combined_label_candidates,
+                                    unique(dopt_zmin$Site))
+if (length(zmin_present_combined) > 0L) {
+  dopt_zmin[Site == zmin_present_combined[[1L]], Site := "Sites averaged"]
+}
+zmin_sub <- dopt_zmin[Site %in% sites_plot & Norm == norm_sel]
+zmin_sub[, site  := factor(Site, levels = sites_plot)]
 zmin_sub[, z_min := as.numeric(z_min)]
 
 p_zmin <- ggplot2::ggplot(

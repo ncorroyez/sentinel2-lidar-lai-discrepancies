@@ -16,22 +16,22 @@
 #         These rasters are the primary LAI input for SVR training in script 08.
 #
 # Prerequisite: dopt_reference.csv produced by script 06 must be present at
-#   revision/output/intermediate/sm5/dopt_reference.csv
+#   output/intermediate/sm5/dopt_reference.csv
 #
 # Output: one GeoTIFF per site × scenario at:
-#   revision/output/intermediate/lai_als_dopt/{site}/
+#   output/intermediate/lai_als_dopt/{site}/
 #   LAI_ALS_dopt_{scenario}.tif
 #   (scenario ∈ {per_site, common})
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/07_compute_lai_als_dopt.R")
+#   source("scripts/07_compute_lai_als_dopt.R")
 # ---
 
 library("here")
 library("terra")
 library("data.table")
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ method_select <- "pareto"          # d_opt method (06)
 
 # Must match the settings used when running 06.
 k_ref        <- 0.5
-k_select     <- 0.6
+k_select     <- 0.65
 theta_select <- 0      # degrees from nadir (scan angle correction handled separately)
 
 # "pool"    — combined d_opt from pooled-pixel row ("Sites combined")
@@ -49,12 +49,16 @@ theta_select <- 0      # degrees from nadir (scan angle correction handled separ
 # Must match combined_mode used in 06.
 combined_mode <- "average"
 
+# TRUE  — always recompute and overwrite existing .tif
+# FALSE — skip sites/scenarios whose output .tif already exists (resume mode)
+overwrite <- TRUE
+
 # ── Derived ────────────────────────────────────────────────────────────────────
 
 combined_label <- if (combined_mode == "average") "Sites averaged" else "Sites combined"
 scale_factor   <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
-cat(sprintf("k_select=%.1f  theta_select=%d°  scale_factor=%.4f\n",
+cat(sprintf("k_select=%.2f  theta_select=%d°  scale_factor=%.4f\n",
             k_select, theta_select, scale_factor))
 
 # ── Load d_opt reference ───────────────────────────────────────────────────────
@@ -88,16 +92,22 @@ cat("Per-site d_opt:", paste(names(d_opt_per_site),
 
 out_root <- file.path(paths$output, "intermediate", "lai_als_dopt")
 
-# ── Helper: cumulative PAD sum to depth d_opt, rescaled for k and theta ────────
-# ladstack layer i = PAD in the i-th metre from canopy top (depth i) at k_ref.
-# LAI_ALS_dopt(k, θ) = scale_factor × sum(ladstack[[1:d_opt]])
+# ── Helper: pre-computed PAD raster at depth d_opt, rescaled for k and theta ─
+# The per-pixel canopy-top integration is done offline and stored as
+#   testPADs/PAD_Profiles_DSM_keepTrees/PAD_X_40.tif  where X = 40 - d_opt + 0.5.
+# Each pixel holds the PAR integrated over the top d_opt metres of canopy
+# at k_ref. LAI_ALS_dopt(k, θ) = scale × PAD_raster.
 
-compute_lai_als_dopt_rast <- function(ladstack_path, d_opt, scale = 1) {
-  lad <- terra::rast(ladstack_path)
-  if (d_opt > terra::nlyr(lad))
-    stop("d_opt (", d_opt, ") exceeds number of layers in ladstack (",
-         terra::nlyr(lad), ")")
-  sum(lad[[seq_len(d_opt)]], na.rm = FALSE) * scale
+pad_filename_dopt <- function(d_opt, canopy_max_m = 40) {
+  sprintf("PAD_%.1f_%d.tif", canopy_max_m - d_opt + 0.5, canopy_max_m)
+}
+
+compute_lai_als_dopt_rast <- function(pad_dir, d_opt, scale = 1,
+                                       canopy_max_m = 40) {
+  pad_file <- file.path(pad_dir, pad_filename_dopt(d_opt, canopy_max_m))
+  if (!file.exists(pad_file))
+    stop("PAD raster not found for d_opt = ", d_opt, " :\n  ", pad_file)
+  terra::rast(pad_file) * scale
 }
 
 # ── Processing loop ────────────────────────────────────────────────────────────
@@ -106,9 +116,9 @@ for (site in sites) {
 
   cat("\n── Processing site:", site, "──\n")
 
-  ladstack_path <- file.path(
+  pad_dir <- file.path(
     paths$prosail_lidar, site, "LiDAR",
-    "PAD_Profiles_Classic", "ladstack.tif"
+    "testPADs", "PAD_Profiles_DSM_keepTrees"
   )
 
   out_dir <- file.path(out_root, site)
@@ -129,12 +139,12 @@ for (site in sites) {
         "| scale =", round(scale_factor, 4),
         "->", basename(out_tif), "\n")
 
-    if (file.exists(out_tif)) {
+    if (file.exists(out_tif) && !overwrite) {
       cat("    [SKIP] tif already exists\n")
       next
     }
 
-    rast_dopt <- compute_lai_als_dopt_rast(ladstack_path, d_opt,
+    rast_dopt <- compute_lai_als_dopt_rast(pad_dir, d_opt,
                                             scale = scale_factor)
     terra::writeRaster(rast_dopt, out_tif, overwrite = TRUE, datatype = "FLT4S")
   }

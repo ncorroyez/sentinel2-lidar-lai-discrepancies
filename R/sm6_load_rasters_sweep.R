@@ -87,8 +87,9 @@ pad_filename_sweep <- function(dopt_value, canopy_max_m = 40) {
 #'   \code{$dsm_sd_block_5}, \ldots, \code{$chm_sd_focal_50}.
 #'
 #' @export
-load_site_rasters_sweep <- function(site, dopt_value = 4, sweep_variants,
-                                    sm6a_dir, ext_dir) {
+load_site_rasters_sweep <- function(site, dopt_value, sweep_variants,
+                                    sm6a_dir, ext_dir,
+                                    lai_als_dopt_path = NULL) {
   dec_only  <- file.path(ext_dir, site, "Metrics", "Deciduous_Only")
   sm6a_site <- file.path(sm6a_dir, site)
   metrics   <- c("DSM", "CHM")
@@ -135,13 +136,23 @@ load_site_rasters_sweep <- function(site, dopt_value = 4, sweep_variants,
   }
   lai_als <- sum(ladstack, na.rm = TRUE)
 
-  pad_fn <- pad_filename_sweep(dopt_value)
+  pad_fn   <- pad_filename_sweep(dopt_value)
+  pad_path <- file.path(dec_only, "PAD_Profiles_dsm_keepTrees", pad_fn)
+
+  if (!is.null(lai_als_dopt_path) && file.exists(lai_als_dopt_path)) {
+    lai_als_dopt <- terra::rast(lai_als_dopt_path)
+  } else if (file.exists(pad_path)) {
+    lai_als_dopt <- terra::rast(pad_path)
+  } else {
+    stop("load_site_rasters_sweep: LAI_ALS_dopt not found for site '", site,
+         "' (d_opt = ", dopt_value, "). Tried:\n  ",
+         lai_als_dopt_path, "\n  ", pad_path,
+         "\nRun scripts/steps/07_compute_lai_als_dopt.R first.")
+  }
 
   rasters <- list(
     lai_als      = lai_als,
-    lai_als_dopt = terra::rast(
-      file.path(dec_only, "PAD_Profiles_dsm_keepTrees", pad_fn)
-    ),
+    lai_als_dopt = lai_als_dopt,
     lai_s2_atbd  = terra::rast(
       file.path(sm6a_dir, site, "s2lai_summer_atbd_T_res_10_m.tif")
     ),
@@ -241,15 +252,19 @@ build_pixel_dt_sweep <- function(rasters, site_name, sweep_variants,
 #'   \code{sum(n_pixels_per_site)} rows.
 #'
 #' @export
-build_multisite_dt_sweep <- function(sites, dopt_value = 4, sweep_variants,
-                                     sm6a_dir, ext_dir) {
+build_multisite_dt_sweep <- function(sites, dopt_value, sweep_variants,
+                                     sm6a_dir, ext_dir,
+                                     lai_als_dopt_paths = NULL) {
   dt_list        <- vector("list", length(sites))
   names(dt_list) <- sites
 
   for (site in sites) {
     cli::cli_alert_info("Loading rasters for site: {site}")
+    als_path <- if (!is.null(lai_als_dopt_paths))
+      lai_als_dopt_paths[[site]] else NULL
     r <- load_site_rasters_sweep(
-      site, dopt_value, sweep_variants, sm6a_dir, ext_dir
+      site, dopt_value, sweep_variants, sm6a_dir, ext_dir,
+      lai_als_dopt_path = als_path
     )
     dt_list[[site]] <- build_pixel_dt_sweep(r, site, sweep_variants)
     cli::cli_alert_success(

@@ -5,11 +5,11 @@
 #         full training time before committing to the 810-model run.
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/02_dryrun_train_prosail.R")
+#   source("scripts/02_dryrun_train_prosail.R")
 # ---
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_lut.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_lut.R"))
 source(file.path(paths$prosail_codes, "libraries", "get_s2_angles.R"))
 
 # ── Dry run parameters ────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ lidar_lai_3m_rast <- terra::rast(
 )
 
 models_dir <- here::here(
-  "revision", "output", "intermediate", "PROSAIL_Models",
+  "output", "intermediate", "PROSAIL_Models",
   site_dryrun, paste0(name_strategy, "_dryrun")
 )
 if (!dir.exists(models_dir))

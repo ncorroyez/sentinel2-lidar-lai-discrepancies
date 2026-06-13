@@ -27,7 +27,7 @@
 #         h_min sensitivity is handled qualitatively in the response letter).
 #
 #         Output:
-#           revision/output/intermediate/reviewers/fcover_sensitivity_atbd.csv
+#           output/intermediate/reviewers/fcover_sensitivity_atbd.csv
 #           9 rows (3 sites × 3 thresholds), 16 columns:
 #             site, fcover_threshold, n_pixels,
 #             lai_als_{mean,median,p95,max},
@@ -40,7 +40,7 @@
 #           03_RESULTS/{site}/Metrics/Raw/s2lai_summer_atbd_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/11_fcover_sensitivity.R")
+#   source("scripts/11_fcover_sensitivity.R")
 # ---
 
 library(here)
@@ -48,13 +48,18 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "fcover_sensitivity.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "fcover_sensitivity.R"))
+source(here::here("R", "k_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites             <- c("Aigoual", "Blois", "Mormal")
 fcover_thresholds <- c(0.80, 0.85, 0.90, 0.95)
+
+# k rescaling — PADs were precomputed with k_ref; analysis uses k_select.
+k_ref             <- 0.5
+k_select          <- 0.65
 
 ext_dir <- paths$ext_results
 out_dir <- file.path(paths$output, "intermediate", "reviewers")
@@ -249,6 +254,8 @@ for (site in sites) {
   ladstack_raw  <- terra::rast(ladstack_raw_path(site))
   ladstack_proj <- terra::project(ladstack_raw, template_mask)
   lai_als_raw   <- sum(ladstack_proj, na.rm = TRUE)
+  lai_als_raw   <- rescale_lai_for_k(lai_als_raw, k_ref = k_ref,
+                                      k_new = k_select)
 
   s2_raw      <- terra::rast(s2_atbd_raw_path(site))
   lai_s2_raw  <- terra::project(s2_raw, template_mask)

@@ -6,7 +6,7 @@
 #         cloud mask, and geometry-of-acquisition angles in a single call.
 #
 #         Mirrors PROSAIL-Optimization/02_CODES/Sentinel2/Main_s2_01_download.R
-#         refactored with here::here() paths and revision/R/sentinel2_preprocessing.R.
+#         refactored with here::here() paths and R/sentinel2_preprocessing.R.
 #
 # Prerequisite: CDSE credentials must be set in ~/.Renviron before running:
 #   CDSE_ID="sh-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
@@ -17,13 +17,13 @@
 # WARNING: do NOT read, display, or copy 01_DATA/copernicus-credentials*.yml.
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/01b_download_s2_from_cdse.R")
+#   source("scripts/01b_download_s2_from_cdse.R")
 # ---
 
 library("here")
 library("preprocS2")
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sentinel2_preprocessing.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sentinel2_preprocessing.R"))
 
 # ── Site parameters — unchanged from Main_s2_01_download.R ────────────────────
 

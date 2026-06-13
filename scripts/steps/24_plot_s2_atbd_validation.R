@@ -11,7 +11,7 @@
 #         generate ATBD_T and ATBD_F rasters with prosail 3.0.0.
 #
 #         Reads:
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #             s2lai_summer_atbd_T_res_10_m.tif   (ATBD_T, from script 25)
 #             s2lai_summer_atbd_F_res_10_m.tif   (ATBD_F, from script 25)
 #           03_RESULTS/{site}/LiDAR/Heterogeneity_Masks/
@@ -20,10 +20,10 @@
 #             {snap_image}_resampled_biophysical10m.data/lai.img
 #
 #         Outputs:
-#           revision/output/figures/reviewers/s2_atbd_validation_heatmap.pdf/.png
+#           output/figures/s2_atbd_validation_heatmap.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/24_plot_s2_atbd_validation.R")
+#   source("scripts/24_plot_s2_atbd_validation.R")
 # ---
 
 library(here)
@@ -32,7 +32,7 @@ library(ggplot2)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -44,9 +44,9 @@ snap_ids <- c(
   Mormal  = "S2A_MSIL2A_20210614T105031_N0300_R051_T31UER_20210614T140120"
 )
 
-snap_root <- file.path(Sys.getenv("HOME"), "Documents", "Softwares", "SNAP_Toolbox_Results")
+snap_root <- paths$snap_lai
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── Compute r and RMSE per site ────────────────────────────────────────────────

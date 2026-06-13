@@ -12,13 +12,13 @@
 #           27      plot_max_height_density — tree height density by site
 #           28      plot_pad_profiles      — PAD profiles per site
 #
-#         Outputs (revision/output/figures/):
+#         Outputs (output/figures/):
 #           sm6/fig_sm6_het_*.pdf, fig_sm6_density_scatter_*.pdf,
 #           fig_s2_reflectances_*.pdf, fig_als_metrics_*.pdf,
 #           fig_max_height_*.pdf, fig_pad_profiles_*.pdf
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/04_het_figures.R")
+#   source("scripts/04_het_figures.R")
 # ---
 
 library(here)
@@ -37,12 +37,13 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/20_sm6_plot_heterogeneity.R")
-step("revision/scripts/steps/21_sm6_density_scatter.R")
-step("revision/scripts/steps/23_plot_s2_reflectance_histograms.R")
-step("revision/scripts/steps/26_plot_als_metrics_scatter.R")
-step("revision/scripts/steps/27_plot_max_height_density.R")
-step("revision/scripts/steps/28_plot_pad_profiles.R")
+step("scripts/steps/20_sm6_plot_heterogeneity.R")
+step("scripts/steps/20d_sm6_heter_continuous.R")
+step("scripts/steps/21_sm6_density_scatter.R")
+step("scripts/steps/23_plot_s2_reflectance_histograms.R")
+step("scripts/steps/26_plot_als_metrics_scatter.R")
+step("scripts/steps/27_plot_max_height_density.R")
+step("scripts/steps/28_plot_pad_profiles.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("04_het_figures done — {elapsed_total} min")

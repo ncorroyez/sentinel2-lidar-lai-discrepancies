@@ -10,13 +10,13 @@
 #           16  sm6_analysis_sweep    — sweep all configs (DSM_sd only)
 #
 #         Outputs:
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #             dsm_sd_res_10_m.tif, chm_sd_res_10_m.tif
-#           revision/output/intermediate/sm6/
+#           output/intermediate/sm6/
 #             sm6_results_all_sites.rds, sm6_sweep_results.rds
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/04_het_compute.R")
+#   source("scripts/04_het_compute.R")
 # ---
 
 library(here)
@@ -35,9 +35,9 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/14_sm6_compute_heterogeneity.R")
-step("revision/scripts/steps/15_sm6_analysis.R")
-step("revision/scripts/steps/16_sm6_analysis_sweep.R")
+step("scripts/steps/14_sm6_compute_heterogeneity.R")
+step("scripts/steps/15_sm6_analysis.R")
+step("scripts/steps/16_sm6_analysis_sweep.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("04_het_compute done — {elapsed_total} min")

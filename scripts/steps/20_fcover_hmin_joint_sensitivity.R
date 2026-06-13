@@ -26,7 +26,7 @@
 #         sensitivity as a complement to the two independent 1D analyses).
 #
 #         Output:
-#           revision/output/intermediate/reviewers/
+#           output/intermediate/reviewers/
 #             joint_fcover_hmin_sensitivity_atbd.csv
 #           36 rows (3 sites × 3 fCover × 4 h_min), 17 columns:
 #             site, fcover_threshold, h_min_value, n_pixels,
@@ -35,7 +35,7 @@
 #             R, R2, RMSE, Bias, Slope
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/20_fcover_hmin_joint_sensitivity.R")
+#   source("scripts/20_fcover_hmin_joint_sensitivity.R")
 # ---
 
 library(here)
@@ -43,16 +43,21 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "fcover_sensitivity.R"))
-source(here::here("revision", "R", "h_min_sensitivity.R"))
-source(here::here("revision", "R", "joint_sensitivity.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "fcover_sensitivity.R"))
+source(here::here("R", "h_min_sensitivity.R"))
+source(here::here("R", "joint_sensitivity.R"))
+source(here::here("R", "k_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites             <- c("Aigoual", "Blois", "Mormal")
 fcover_thresholds <- c(0.80, 0.90, 0.95)
 h_min_values      <- c(2, 3, 4, 5)
+
+# k rescaling — PADs were precomputed with k_ref; analysis uses k_select.
+k_ref             <- 0.5
+k_select          <- 0.65
 
 ext_dir <- paths$ext_results
 out_dir <- file.path(paths$output, "intermediate", "reviewers")
@@ -178,6 +183,8 @@ for (site in sites) {
     cli::cli_alert_info("  h_min = {h_min} m")
 
     lai_als_hmin <- sum_lai_als_at_h_min_from_raster(ladstack_proj, h_min)
+    lai_als_hmin <- rescale_lai_for_k(lai_als_hmin, k_ref = k_ref,
+                                       k_new = k_select)
 
     for (threshold in fcover_thresholds) {
       row_idx  <- row_idx + 1L

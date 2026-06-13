@@ -10,7 +10,7 @@ library("terra")
 library("data.table")
 library("ggplot2")
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 sites <- c("Aigoual", "Blois", "Mormal")
 
@@ -21,7 +21,7 @@ ladstack_paths <- setNames(
 )
 
 out_root <- file.path(paths$output, "intermediate", "scan_angle")
-out_figs <- file.path(paths$output, "figures", "scan_angle")
+out_figs <- file.path(paths$output, "figures")
 if (!dir.exists(out_figs)) dir.create(out_figs, recursive = TRUE)
 
 site_stats  <- list()

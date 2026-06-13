@@ -217,7 +217,7 @@ compute_heterogeneity <- function(source_raster_path, mask_raster_path,
 #'   het_raster   = het,
 #'   site         = "Blois",
 #'   out_filename = build_output_filename("DSM", "block", 10),
-#'   out_dir      = here::here("revision", "output", "intermediate", "sm6")
+#'   out_dir      = here::here("output", "intermediate", "sm6")
 #' )
 #' }
 #'
@@ -232,4 +232,80 @@ save_heterogeneity_raster <- function(het_raster, site, out_filename, out_dir) {
   terra::writeRaster(het_raster, out_path, overwrite = TRUE)
 
   invisible(out_path)
+}
+
+
+# ── window_metrics ────────────────────────────────────────────────────────────
+
+#' @title Sliding-window r/RMSE/Bias/Slope along a covariate axis
+#'
+#' @description
+#' Sorts paired \code{(x_var, y_var)} observations by an ordering covariate
+#' (typically \code{dsm_sd}) and computes the four agreement metrics inside
+#' overlapping windows of width \code{window_n}, advancing by
+#' \code{window_step} in rank. Metrics use the \code{lm(y ~ x)} convention
+#' consistent with \code{compute_metrics_by_class()}:
+#' \describe{
+#'   \item{R}{Pearson \code{cor(x_var, y_var)}}
+#'   \item{RMSE}{\code{sqrt(mean((y_var - x_var)^2))}}
+#'   \item{Bias}{\code{mean(y_var - x_var)}}
+#'   \item{Slope}{\code{coef(lm(y_var ~ x_var))[[2]]}}
+#' }
+#'
+#' Windows containing fewer than \code{min_n_per_window} valid pairs are
+#' dropped. The window centre is the median of the ordering covariate inside
+#' the window (so the abscissa is on the covariate's own scale).
+#'
+#' WARNING: adjacent windows overlap by \code{(window_n - window_step) /
+#' window_n}, so the resulting series is not independent across windows;
+#' do NOT compute naive confidence intervals or significance tests on it.
+#'
+#' @param x_var            Numeric vector. Predictor (e.g. LAI_ALS).
+#' @param y_var            Numeric vector. Response (e.g. LAI_S2).
+#' @param dsm_sd           Numeric vector. Ordering covariate.
+#' @param window_n         Integer. Window width in points.
+#' @param window_step      Integer. Step between window starts in rank.
+#' @param min_n_per_window Integer. Skip windows with fewer valid pairs.
+#'
+#' @return A \code{data.table} with columns
+#'   \code{dsm_sd_center, n_window, R, RMSE, Bias, Slope}. Empty
+#'   \code{data.table} if fewer than \code{min_n_per_window} valid pairs.
+#'
+#' @export
+window_metrics <- function(x_var, y_var, dsm_sd, window_n, window_step,
+                           min_n_per_window) {
+  ok  <- !is.na(x_var) & !is.na(y_var) & !is.na(dsm_sd)
+  x_var  <- x_var[ok]; y_var <- y_var[ok]; dsm_sd <- dsm_sd[ok]
+  o      <- order(dsm_sd)
+  x_var  <- x_var[o];  y_var <- y_var[o]; dsm_sd <- dsm_sd[o]
+  n_tot  <- length(dsm_sd)
+
+  if (n_tot < min_n_per_window) return(data.table::data.table())
+
+  win_starts <- seq.int(1L, max(1L, n_tot - window_n + 1L), by = window_step)
+  rows <- vector("list", length(win_starts))
+  for (i in seq_along(win_starts)) {
+    s <- win_starts[i]; e <- min(s + window_n - 1L, n_tot)
+    n_win <- e - s + 1L
+    if (n_win < min_n_per_window) next
+    xv <- x_var[s:e]; yv <- y_var[s:e]
+    dsm_c <- stats::median(dsm_sd[s:e])
+
+    diff <- yv - xv
+    r_val    <- stats::cor(xv, yv)
+    rmse_val <- sqrt(mean(diff^2))
+    bias_val <- mean(diff)
+    fit       <- stats::lm(yv ~ xv)
+    slope_val <- stats::coef(fit)[[2L]]
+
+    rows[[i]] <- data.table::data.table(
+      dsm_sd_center = dsm_c,
+      n_window      = n_win,
+      R             = r_val,
+      RMSE          = rmse_val,
+      Bias          = bias_val,
+      Slope         = slope_val
+    )
+  }
+  data.table::rbindlist(rows)
 }

@@ -6,18 +6,20 @@
 #         Layout: 3 panels (RMSE | Bias | Slope), x = k, one coloured line
 #         per site at theta = 0 degrees. Shaded ribbon = range across all
 #         theta values (0 to 30 degrees) to show the secondary theta effect.
-#         Reference: vertical line at k = 0.5 (Bouvier et al. 2015 default).
+#         References: solid red vertical line at k = 0.65 (value retained in
+#         this study); dotted grey vertical line at k = 0.5 (Bouvier et al.
+#         2015 default).
 #         R is not shown: it is invariant to scale transformations of LAI_ALS.
 #
 #         Reads:
-#           revision/output/intermediate/reviewers/
+#           output/intermediate/reviewers/
 #             k_theta_sensitivity_atbd.csv
 #
 #         Outputs:
-#           revision/output/figures/reviewers/sm_k_sensitivity.pdf / .png
+#           output/figures/sm_k_sensitivity.pdf / .png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/17b_k_sensitivity_plot.R")
+#   source("scripts/17b_k_sensitivity_plot.R")
 # ---
 
 library(here)
@@ -26,16 +28,18 @@ library(ggplot2)
 library(scales)
 library(cli)
 
+source(here::here("R", "paths.R"))
+
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
 in_csv  <- here::here(
-  "revision", "output", "intermediate", "reviewers",
+  "output", "intermediate", "reviewers",
   "k_theta_sensitivity_atbd.csv"
 )
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 
 if (!file.exists(in_csv))
-  stop("Missing: ", in_csv, "\nRun revision/scripts/17_k_sensitivity.R first.")
+  stop("Missing: ", in_csv, "\nRun scripts/17_k_sensitivity.R first.")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 dt <- data.table::fread(in_csv)
@@ -45,7 +49,10 @@ cli::cli_alert_success("Loaded {nrow(dt)} rows")
 
 site_levels   <- c("Aigoual", "Blois", "Mormal")
 site_colours  <- c(Aigoual = "#1b7837", Blois = "#762a83", Mormal = "#d6604d")
-k_ref         <- 0.6
+# k_bouvier = 0.5 → default value from Bouvier et al. 2015 (random leaf angle).
+# k_select  = 0.65 → value retained in this study (closed temperate deciduous).
+k_bouvier     <- 0.5
+k_select      <- 0.65
 
 metrics_sel <- c("R", "RMSE", "Bias", "Slope")
 
@@ -124,10 +131,15 @@ p <- ggplot2::ggplot() +
     linetype = "dashed", colour = "grey50", linewidth = 0.5,
     inherit.aes = FALSE
   ) +
-  # k = 0.5 reference
+  # k = 0.5 (Bouvier et al. 2015 default) — dotted grey
   ggplot2::geom_vline(
-    xintercept = k_ref,
-    linetype   = "dotted", colour = "grey40", linewidth = 0.6
+    xintercept = k_bouvier,
+    linetype   = "dotted", colour = "grey50", linewidth = 0.5
+  ) +
+  # k = 0.65 (value retained in this study) — solid red
+  ggplot2::geom_vline(
+    xintercept = k_select,
+    linetype   = "solid", colour = "firebrick", linewidth = 0.7
   ) +
   # Theta = 0 lines
   ggplot2::geom_line(
@@ -156,16 +168,10 @@ p <- ggplot2::ggplot() +
   ggplot2::scale_fill_manual(values   = site_colours) +
   ggplot2::scale_x_continuous(
     name   = expression(italic(k) ~ (extinction ~ coefficient)),
-    breaks = c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+    breaks = seq(0.5, 0.8, by = 0.05)
   ) +
   ggplot2::labs(
-    y       = NULL,
-    caption = paste0(
-      "Solid line: theta = 0 deg (nadir). ",
-      "Shaded band: range across theta in {0, 5, ..., 30} deg. ",
-      "Dotted vertical: k = 0.6 (value used in this study). ",
-      "Dashed horizontal: Bias = 0 / Slope = 1."
-    )
+    y = NULL
   ) +
   theme_k +
   ggplot2::theme(

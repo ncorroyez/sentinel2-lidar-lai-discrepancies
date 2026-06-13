@@ -1,15 +1,15 @@
 # ---
 # title:  test_lidar_lai.R
 # desc:   Unit tests for compute_pai() and compute_lad_profile() in
-#         revision/R/lidar_lai.R. Tests verify numerical equivalence with
+#         R/lidar_lai.R. Tests verify numerical equivalence with
 #         the original functions (myPAI / myPAD / myPAD_dtm) from
 #         02_CODES/libraries/functions_lidar.R, and correct behaviour of
 #         the new h_min / k arguments.
 #
 # Run from the project root:
-#   source("revision/R/lidar_lai.R")
+#   source("R/lidar_lai.R")
 #   source("02_CODES/libraries/functions_lidar.R")   # for reference values
-#   source("revision/tests/test_lidar_lai.R")
+#   source("tests/test_lidar_lai.R")
 # ---
 
 library("lidR")

@@ -3,7 +3,7 @@
 # desc:   Selection of the optimal canopy integration depth (d_opt) for the
 #         d_opt analysis (SM5). Implements four selection methods: pearson
 #         (which.max R), rmse (which.min RMSE), bias (which.min |Bias|), and
-#         pareto (multi-criteria distance to utopian point).
+#         pareto (multi-criteria score: mean of normalised criteria).
 #
 #         Addresses reviewer comments R3.minor.13 and R4.spec.2, which
 #         requested testing selection criteria alternative to Pearson
@@ -16,26 +16,35 @@
 #'
 #' @description
 #' Given the metrics table for a single (Site × Norm × Column) triplet across
-#' all available depths (typically 1–38), selects the depth that minimises the
-#' Euclidean distance to the utopian point in a four-dimensional normalised
-#' criterion space. The four criteria to minimise are:
+#' all available depths (typically 1–38), identifies the Pareto front (non-
+#' dominated depths) and selects within that front the depth that minimises
+#' the MEAN of normalised minimisable criteria (\code{Avg_score}).
+#' The available criteria are:
 #' \describe{
 #'   \item{m1}{\code{1 - R} (high Pearson r is desirable)}
 #'   \item{m2}{\code{RMSE}}
 #'   \item{m3}{\code{abs(Bias)}}
 #'   \item{m4}{\code{abs(Slope - 1)}}
 #' }
-#' Each criterion is normalised to \[0, 1\] across the valid depths for the
-#' triplet: \code{m_norm = (m - min(m)) / (max(m) - min(m))}. A constant
-#' criterion (max == min) is set to 0 for all depths. Depths with NA on any
-#' of the four criteria are excluded before normalisation. The utopian point
-#' is \code{(0, 0, 0, 0)}.
+#' By default all four are used; passing \code{criteria = c("R","RMSE","Bias")}
+#' drops \code{|Slope - 1|}.
 #'
-#' In addition to the selected depth, the function returns the complete set of
-#' Pareto-non-dominated depths for use in sensitivity figures (R3.minor.13,
-#' R4.spec.2). A depth d1 dominates d2 if and only if
-#' \code{m_norm[d1, i] <= m_norm[d2, i]} for all i, with at least one strict
-#' inequality.
+#' Three-stage procedure:
+#' \enumerate{
+#'   \item Each criterion is min-max normalised over all valid candidates
+#'         (\code{(m - min) / (max - min)}); constant criteria are set to
+#'         0. \code{Avg_score = 1 - mean(m_norm)} ("higher = better",
+#'         1 = best, 0 = worst over the valid range).
+#'   \item Dominance identifies Front-1 over the same candidate set.
+#'         Dominance is invariant to a positive-monotone rescaling, so it
+#'         is tested on the raw minimisable criteria.
+#'   \item The selected depth is \code{argmax(Avg_score)}, which by
+#'         construction lies in Front-1 (a dominated candidate is strictly
+#'         worse on at least one criterion, hence has strictly smaller
+#'         Avg_score). Ties: \code{which.max()} returns the smallest depth.
+#' }
+#' A depth d1 dominates d2 if and only if all criterion values at d1 are
+#' \eqn{\le} those at d2, with at least one strict inequality.
 #'
 #' @param metrics_subset A \code{data.table} with columns \code{Depth}
 #'   (integer), \code{R2} (numeric), \code{RMSE} (numeric), \code{Bias}
@@ -44,16 +53,17 @@
 #'
 #' @return A named list:
 #' \describe{
-#'   \item{d_opt}{Integer. Depth with minimum distance to utopian point.
+#'   \item{d_opt}{Integer. Front-1 depth with maximum \code{Avg_score}.
 #'                \code{NA_integer_} if fewer than 2 non-NA depths available.}
-#'   \item{dist_min}{Numeric. Distance to utopian point at \code{d_opt}.
-#'                   \code{NA_real_} if fewer than 2 non-NA depths.}
+#'   \item{Avg_score_best}{Numeric. \code{Avg_score} at \code{d_opt}
+#'                        (\code{1 - mean(m_norm)} over criteria normalised
+#'                        on the full valid candidate set; 1 = best,
+#'                        0 = worst). \code{NA_real_} if too few candidates.}
 #'   \item{pareto_front_depths}{Integer vector of non-dominated depths.
-#'                              \code{NA_integer_} if fewer than 2 non-NA
-#'                              depths.}
-#'   \item{all_distances}{Named numeric vector of utopian distances for all
-#'                        non-NA depths, names are depth indices as character.
-#'                        \code{NULL} if fewer than 2 non-NA depths.}
+#'                              \code{NA_integer_} if too few non-NA depths.}
+#'   \item{all_distances}{Named numeric vector of \code{Avg_score} for every
+#'                        candidate. Names are depth indices as character.
+#'                        Higher = better. \code{NULL} if too few candidates.}
 #' }
 #'
 #' @references
@@ -70,68 +80,130 @@
 #' )
 #' compute_pareto_front(sub)
 #'
+#' @param criteria Character vector of criteria to include in the Pareto
+#'   dominance test AND the Pareto score. Subset of
+#'   \code{c("R", "RMSE", "Bias", "Slope")}. Default uses all four. Pass
+#'   \code{c("R", "RMSE", "Bias")} to drop \code{|Slope - 1|}.
+#'
 #' @export
-compute_pareto_front <- function(metrics_subset) {
+compute_pareto_front <- function(metrics_subset,
+                                 criteria    = c("R", "RMSE", "Bias", "Slope"),
+                                 norm_method = c("max", "minmax"),
+                                 norm_scope  = c("front1", "all")) {
+  criteria    <- match.arg(criteria, c("R", "RMSE", "Bias", "Slope"),
+                            several.ok = TRUE)
+  norm_method <- match.arg(norm_method)
+  norm_scope  <- match.arg(norm_scope)
+
   na_result <- list(
     d_opt               = NA_integer_,
-    dist_min            = NA_real_,
+    Avg_score_best      = NA_real_,
     pareto_front_depths = NA_integer_,
     all_distances       = NULL
   )
 
   depths <- metrics_subset[["Depth"]]
 
-  # Four criteria to minimise — literal specification
-  m1 <- 1 - metrics_subset[["R"]]            # m1 = 1 - r (Pearson r)
-  m2 <- metrics_subset[["RMSE"]]             # m2 = RMSE
-  m3 <- abs(metrics_subset[["Bias"]])        # m3 = abs(Bias)
-  m4 <- abs(metrics_subset[["Slope"]] - 1)  # m4 = abs(Slope - 1)
+  # Round input metrics to 2 dp BEFORE building the criteria matrix. This
+  # makes Pareto dominance and normalised score invariant to sub-0.01
+  # floating-point noise: two configs differing only at the 3rd decimal
+  # are treated as ties on that criterion.
+  R_r     <- round(metrics_subset[["R"]],     2)
+  RMSE_r  <- round(metrics_subset[["RMSE"]],  2)
+  Bias_r  <- round(metrics_subset[["Bias"]],  2)
+  Slope_r <- round(metrics_subset[["Slope"]], 2)
 
-  # Exclude depths with NA on any criterion
-  valid <- !is.na(m1) & !is.na(m2) & !is.na(m3) & !is.na(m4)
+  # Build the metric matrix from the requested criteria (minimisable form)
+  m_cols <- list(
+    R     = 1 - R_r,
+    RMSE  = RMSE_r,
+    Bias  = abs(Bias_r),
+    Slope = abs(Slope_r - 1)
+  )
+  m_mat_full <- do.call(cbind, m_cols[criteria])
+
+  valid <- stats::complete.cases(m_mat_full)
   if (sum(valid) < 2L) return(na_result)
 
   depths_v <- depths[valid]
-  m_mat    <- cbind(m1[valid], m2[valid], m3[valid], m4[valid])
+  m_mat    <- m_mat_full[valid, , drop = FALSE]
 
-  # Normalise each criterion to [0, 1] locally over valid depths.
-  # Constant criterion (max == min) → 0 for all depths (no discrimination).
-  m_norm <- apply(m_mat, 2L, function(x) {
-    lo <- min(x); hi <- max(x)
-    if (hi == lo) return(rep(0, length(x)))
-    (x - lo) / (hi - lo)
-  })
-
-  # Euclidean distance to utopian point (0, 0, 0, 0)
-  dist_v         <- sqrt(rowSums(m_norm^2))
-  names(dist_v)  <- as.character(depths_v)
-
-  # d_opt: depth with minimum utopian distance
-  idx_min  <- which.min(dist_v)
-  d_opt    <- depths_v[idx_min]
-  dist_min <- dist_v[[idx_min]]
-
-  # Pareto front: non-dominated depths.
-  # d1 dominates d2 iff all m_norm[d1,] <= m_norm[d2,] with >= 1 strict ineq.
-  n          <- nrow(m_norm)
-  dominated  <- logical(n)
+  # Pareto front: non-dominated depths over ALL valid depths.
+  # d1 dominates d2 iff all m_mat[d2, ] <= m_mat[d1, ] with >= 1 strict ineq.
+  # Dominance is invariant to positive-monotone rescaling, so it can be
+  # tested directly on the raw minimisable criteria (no need to normalise).
+  n         <- nrow(m_mat)
+  dominated <- logical(n)
   for (i in seq_len(n)) {
     for (j in seq_len(n)) {
       if (i == j) next
-      if (all(m_norm[j, ] <= m_norm[i, ]) &&
-          any(m_norm[j, ] <  m_norm[i, ])) {
+      if (all(m_mat[j, ] <= m_mat[i, ]) &&
+          any(m_mat[j, ] <  m_mat[i, ])) {
         dominated[i] <- TRUE
         break
       }
     }
   }
-  front_depths <- depths_v[!dominated]
+  front_idx    <- which(!dominated)
+  front_depths <- depths_v[front_idx]
+
+  # Normalise criteria min-max:
+  #   norm_scope = "all"    → over every valid candidate (use case: d_opt
+  #                            selection across depths in [1, dthr]).
+  #   norm_scope = "front1" → over Front-1 candidates only (use case:
+  #                            PROSAIL OPT selection, where dozens of
+  #                            absurd configurations on the ~225 grid
+  #                            would otherwise stretch min/max bounds
+  #                            and compress the realistic configs).
+  #   minmax → (m - min) / (max - min)  ∈ [0, 1]
+  #   max    → m / max                  ∈ [min/max, 1]
+  # A constant criterion is set to 0.
+  norm_set_idx <- if (norm_scope == "all") seq_len(nrow(m_mat)) else front_idx
+  m_ref <- m_mat[norm_set_idx, , drop = FALSE]
+
+  proj_one <- function(x, xref) {
+    hi <- max(xref)
+    if (norm_method == "max") {
+      if (hi == 0) return(rep(0, length(x)))
+      return(x / hi)
+    }
+    lo <- min(xref)
+    if (hi == lo) return(rep(0, length(x)))
+    (x - lo) / (hi - lo)
+  }
+  m_norm <- vapply(seq_len(ncol(m_mat)), function(j) {
+    proj_one(m_mat[, j], m_ref[, j])
+  }, numeric(nrow(m_mat)))
+  if (!is.matrix(m_norm)) m_norm <- matrix(m_norm, ncol = ncol(m_mat))
+
+  # Avg_score: HIGHER = better. 1 - mean(minmax-normalised), rounded 2 dp.
+  # Ties broken by which.max() → smallest depth.
+  avg_v <- round(1 - rowMeans(m_norm), 2)
+
+  if (norm_scope == "front1") {
+    # Restrict the argmax search to Front-1 (dominated candidates may have
+    # Avg_score outside [0, 1] under this projection — not meaningful).
+    candidate_idx  <- front_idx
+    sub_avg        <- avg_v[candidate_idx]
+    idx_in_front   <- which.max(sub_avg)
+    d_opt          <- depths_v[candidate_idx[idx_in_front]]
+    Avg_score_best <- sub_avg[[idx_in_front]]
+    # all_distances: keep only Front-1 values; NA elsewhere.
+    all_distances        <- rep(NA_real_, length(depths_v))
+    all_distances[front_idx] <- avg_v[front_idx]
+  } else {
+    idx_max        <- which.max(avg_v)
+    d_opt          <- depths_v[idx_max]
+    Avg_score_best <- avg_v[[idx_max]]
+    all_distances  <- avg_v
+  }
+  names(all_distances) <- as.character(depths_v)
 
   list(
     d_opt               = d_opt,
-    dist_min            = dist_min,
+    Avg_score_best      = Avg_score_best,
     pareto_front_depths = front_depths,
-    all_distances       = dist_v
+    all_distances       = all_distances
   )
 }
 
@@ -139,15 +211,20 @@ compute_pareto_front <- function(metrics_subset) {
 #
 # Applies one selection method to a (Site × Norm × Column) subset (all depths).
 # Returns a one-row data.table with columns:
-#   method_dopt, d_opt, R, R2, RMSE, Bias, Slope, dist_utopia, pareto_front.
-# dist_utopia and pareto_front are NA for methods other than "pareto".
+#   method_dopt, d_opt, R, R2, RMSE, Bias, Slope, Avg_score, pareto_front.
+# Avg_score and pareto_front are NA for methods other than "pareto".
 # pareto_front is encoded as "3,4,5,7" (comma-separated sorted depths).
 #
-select_dopt_single <- function(metrics_subset, method) {
+select_dopt_single <- function(metrics_subset, method,
+                                pareto_criteria   = c("R","RMSE","Bias","Slope"),
+                                pareto_norm_method = c("max", "minmax"),
+                                pareto_norm_scope  = c("front1", "all")) {
+  pareto_norm_method <- match.arg(pareto_norm_method)
+  pareto_norm_scope  <- match.arg(pareto_norm_scope)
   depths <- metrics_subset[["Depth"]]
 
   d_opt        <- NA_integer_
-  dist_utopia  <- NA_real_
+  Avg_score    <- NA_real_
   pareto_front <- NA_character_
 
   if (method == "pearson") {
@@ -167,10 +244,13 @@ select_dopt_single <- function(metrics_subset, method) {
     if (length(idx) > 0L) d_opt <- depths[idx]
 
   } else if (method == "pareto") {
-    pf    <- compute_pareto_front(metrics_subset)
+    pf    <- compute_pareto_front(metrics_subset,
+                                   criteria    = pareto_criteria,
+                                   norm_method = pareto_norm_method,
+                                   norm_scope  = pareto_norm_scope)
     d_opt <- pf$d_opt
 
-    dist_utopia <- if (is.na(pf$d_opt)) NA_real_ else pf$dist_min
+    Avg_score <- if (is.na(pf$d_opt)) NA_real_ else pf$Avg_score_best
 
     pareto_front <- if (anyNA(pf$pareto_front_depths)) {
       NA_character_
@@ -179,7 +259,8 @@ select_dopt_single <- function(metrics_subset, method) {
     }
   }
 
-  # Extract metrics at d_opt; all NA if d_opt itself is NA
+  # Extract metrics at d_opt; all NA if d_opt itself is NA.
+  # Round to 2 dp for consistency with the Pareto computation and CSVs.
   if (is.na(d_opt)) {
     r_val     <- NA_real_
     r2_val    <- NA_real_
@@ -188,11 +269,11 @@ select_dopt_single <- function(metrics_subset, method) {
     slope_val <- NA_real_
   } else {
     row_d     <- metrics_subset[Depth == d_opt]
-    r_val     <- row_d[["R"]][[1L]]
-    r2_val    <- row_d[["R2"]][[1L]]
-    rmse_val  <- row_d[["RMSE"]][[1L]]
-    bias_val  <- row_d[["Bias"]][[1L]]
-    slope_val <- row_d[["Slope"]][[1L]]
+    r_val     <- round(row_d[["R"]][[1L]],     2)
+    r2_val    <- round(row_d[["R2"]][[1L]],    2)
+    rmse_val  <- round(row_d[["RMSE"]][[1L]],  2)
+    bias_val  <- round(row_d[["Bias"]][[1L]],  2)
+    slope_val <- round(row_d[["Slope"]][[1L]], 2)
   }
 
   data.table::data.table(
@@ -203,7 +284,7 @@ select_dopt_single <- function(metrics_subset, method) {
     RMSE         = rmse_val,
     Bias         = bias_val,
     Slope        = slope_val,
-    dist_utopia  = dist_utopia,
+    Avg_score    = Avg_score,
     pareto_front = pareto_front
   )
 }
@@ -255,7 +336,8 @@ select_dopt_single <- function(metrics_subset, method) {
 #'   \item{Column_opt}{character — best PROSAIL column at d_opt}
 #'   \item{ATBD}{logical}
 #'   \item{R, R2, RMSE, Bias, Slope}{numeric — metrics at d_opt for Column_opt}
-#'   \item{dist_utopia}{numeric — Pareto distance for Column_opt}
+#'   \item{Avg_score}{numeric — mean of Front-1-normalised criteria for
+#'                    Column_opt (1 = best within front, 0 = worst)}
 #'   \item{n_pareto_front}{integer — number of non-dominated columns}
 #' }
 #'
@@ -265,10 +347,16 @@ select_dopt_single <- function(metrics_subset, method) {
 #' @export
 select_prosail_opt <- function(metrics_dt,
                                 dopt_dt,
-                                dopt_method      = "pareto",
-                                norm_filter      = "keepTrees",
-                                individual_sites = c("Aigoual", "Blois", "Mormal"),
-                                fixed_d_opt      = NULL) {
+                                dopt_method        = "pareto",
+                                norm_filter        = "keepTrees",
+                                individual_sites   = c("Aigoual", "Blois", "Mormal"),
+                                fixed_d_opt        = NULL,
+                                pareto_criteria    = c("R","RMSE","Bias","Slope"),
+                                pareto_norm_method = c("max", "minmax"),
+                                pareto_norm_scope  = c("front1", "all")) {
+  pareto_norm_method <- match.arg(pareto_norm_method)
+  pareto_norm_scope  <- match.arg(pareto_norm_scope)   # default front1
+                                                       # for PROSAIL OPT
 
   # ── Apply norm filter ────────────────────────────────────────────────────────
   if (!is.null(norm_filter) && nzchar(norm_filter)) {
@@ -304,13 +392,18 @@ select_prosail_opt <- function(metrics_dt,
     sub_pf <- data.table::copy(sub)
     sub_pf[, tmp_depth := .I]
 
-    pf <- compute_pareto_front(data.table::data.table(
-      Depth = sub_pf[["tmp_depth"]],
-      R     = sub_pf[["R"]],
-      RMSE  = sub_pf[["RMSE"]],
-      Bias  = sub_pf[["Bias"]],
-      Slope = sub_pf[["Slope"]]
-    ))
+    pf <- compute_pareto_front(
+      data.table::data.table(
+        Depth = sub_pf[["tmp_depth"]],
+        R     = sub_pf[["R"]],
+        RMSE  = sub_pf[["RMSE"]],
+        Bias  = sub_pf[["Bias"]],
+        Slope = sub_pf[["Slope"]]
+      ),
+      criteria    = pareto_criteria,
+      norm_method = pareto_norm_method,
+      norm_scope  = pareto_norm_scope
+    )
 
     if (is.na(pf$d_opt)) {
       cli::cli_warn(
@@ -332,12 +425,12 @@ select_prosail_opt <- function(metrics_dt,
       method_dopt   = dopt_method,
       Column_opt    = best_row[["Column"]],
       ATBD          = best_row[["ATBD"]],
-      R             = best_row[["R"]],
-      R2            = best_row[["R2"]],
-      RMSE          = best_row[["RMSE"]],
-      Bias          = best_row[["Bias"]],
-      Slope         = best_row[["Slope"]],
-      dist_utopia   = pf$dist_min,
+      R              = round(best_row[["R"]],     2),
+      R2             = round(best_row[["R2"]],    2),
+      RMSE           = round(best_row[["RMSE"]],  2),
+      Bias           = round(best_row[["Bias"]],  2),
+      Slope          = round(best_row[["Slope"]], 2),
+      Avg_score      = pf$Avg_score_best,
       n_pareto_front = n_pf
     )
   }
@@ -389,7 +482,7 @@ select_prosail_opt <- function(metrics_dt,
       d_opt = integer(), method_dopt = character(), Column_opt = character(),
       ATBD = logical(), R = numeric(), R2 = numeric(), RMSE = numeric(),
       Bias = numeric(), Slope = numeric(),
-      dist_utopia = numeric(), n_pareto_front = integer()
+      Avg_score = numeric(), n_pareto_front = integer()
     ))
   }
 
@@ -452,7 +545,8 @@ select_prosail_opt <- function(metrics_dt,
 #'   \item{RMSE}{numeric — value at d_opt}
 #'   \item{Bias}{numeric — value at d_opt}
 #'   \item{Slope}{numeric — value at d_opt}
-#'   \item{dist_utopia}{numeric — NA unless method_dopt == "pareto"}
+#'   \item{Avg_score}{numeric — mean of Front-1-normalised criteria at d_opt
+#'                    (1 = best, 0 = worst); NA unless method_dopt == "pareto"}
 #'   \item{pareto_front}{character — NA unless method_dopt == "pareto";
 #'                       sorted depths as "3,4,5,7"}
 #' }
@@ -479,9 +573,14 @@ select_prosail_opt <- function(metrics_dt,
 #'
 #' @export
 select_dopt <- function(metrics_dt,
-                        methods        = c("pearson", "rmse", "bias", "pareto"),
-                        max_depth      = NULL,
-                        prosail_filter = "ATBD") {
+                        methods         = c("pearson", "rmse", "bias", "pareto"),
+                        max_depth       = NULL,
+                        prosail_filter  = "ATBD",
+                        pareto_criteria = c("R","RMSE","Bias","Slope"),
+                        pareto_norm_method = c("max", "minmax"),
+                        pareto_norm_scope  = c("front1", "all")) {
+  pareto_norm_method <- match.arg(pareto_norm_method)
+  pareto_norm_scope  <- match.arg(pareto_norm_scope)
 
   # ── Filter PROSAIL columns ───────────────────────────────────────────────────
   if (identical(prosail_filter, "ATBD")) {
@@ -512,7 +611,7 @@ select_dopt <- function(metrics_dt,
       ATBD = logical(), method_dopt = character(), d_opt = integer(),
       R = numeric(), R2 = numeric(), RMSE = numeric(),
       Bias = numeric(), Slope = numeric(),
-      dist_utopia = numeric(), pareto_front = character()
+      Avg_score = numeric(), pareto_front = character()
     ))
   }
 
@@ -530,7 +629,10 @@ select_dopt <- function(metrics_dt,
 
     for (method in methods) {
       idx          <- idx + 1L
-      row          <- select_dopt_single(sub, method)
+      row          <- select_dopt_single(sub, method,
+                                          pareto_criteria    = pareto_criteria,
+                                          pareto_norm_method = pareto_norm_method,
+                                          pareto_norm_scope  = pareto_norm_scope)
       row[, Site   := site]
       row[, Norm   := norm]
       row[, Column := col]
@@ -543,7 +645,7 @@ select_dopt <- function(metrics_dt,
   data.table::setcolorder(result, c(
     "Site", "Norm", "Column", "ATBD", "method_dopt",
     "d_opt", "R", "R2", "RMSE", "Bias", "Slope",
-    "dist_utopia", "pareto_front"
+    "Avg_score", "pareto_front"
   ))
   result
 }

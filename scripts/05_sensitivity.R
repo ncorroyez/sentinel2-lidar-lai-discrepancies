@@ -12,7 +12,7 @@
 #           19   h_min_sensitivity         — LAI comparison vs h_min ∈ {2,3,4,5} m
 #           20j  fcover_hmin_joint         — joint fCover × h_min sensitivity
 #
-#         Outputs (revision/output/intermediate/reviewers/):
+#         Outputs (output/intermediate/reviewers/):
 #           kt_sensitivity_atbd_*.csv
 #           k_sensitivity_results.csv
 #           fcover_sensitivity_atbd.csv
@@ -20,7 +20,7 @@
 #           joint_fcover_hmin_sensitivity_atbd.csv
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/05_sensitivity.R")
+#   source("scripts/05_sensitivity.R")
 # ---
 
 library(here)
@@ -39,11 +39,11 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/05c_sm5_k_zmin_sensitivity_dopt.R")
-step("revision/scripts/steps/17_k_sensitivity.R")
-step("revision/scripts/steps/18_fcover_sensitivity.R")
-step("revision/scripts/steps/19_h_min_sensitivity.R")
-step("revision/scripts/steps/20_fcover_hmin_joint_sensitivity.R")
+step("scripts/steps/05c_sm5_k_zmin_sensitivity_dopt.R")
+step("scripts/steps/17_k_sensitivity.R")
+step("scripts/steps/18_fcover_sensitivity.R")
+step("scripts/steps/19_h_min_sensitivity.R")
+step("scripts/steps/20_fcover_hmin_joint_sensitivity.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("05_sensitivity done — {elapsed_total} min")

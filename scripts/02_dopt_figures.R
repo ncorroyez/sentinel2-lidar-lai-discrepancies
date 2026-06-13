@@ -5,13 +5,15 @@
 #
 #         Steps (in order):
 #           05b  plot_dopt_metrics — r vs depth curves, d_opt arrows, SM5 figs
-#           08   scatter_lai_atbd  — 2×3 scatter + histogram comparison figure
+#         NOTE: 08 (scatter_lai_atbd) moved to 03_prosail_figures.R because
+#         it depends on s2lai_summer_atbd_T_*.tif produced by 25 (phase 3).
+#         Keeping 08 in phase 2 broke full-rerun pipelines.
 #
-#         Outputs (revision/output/figures/sm5/):
+#         Outputs (output/figures/):
 #           fig_sm5_r_vs_depth_*.pdf, fig_sm5_scatter_*.pdf, etc.
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/02_dopt_figures.R")
+#   source("scripts/02_dopt_figures.R")
 # ---
 
 library(here)
@@ -30,8 +32,9 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/05b_sm5_plot_dopt_metrics.R")
-step("revision/scripts/steps/08_sm5_scatter_lai_atbd.R")
+step("scripts/steps/05b_sm5_plot_dopt_metrics.R")
+# 08_sm5_scatter_lai_atbd.R is now in 03_prosail_figures.R (it consumes the
+# ATBD_T raster produced by 25 in phase 3).
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("02_dopt_figures done — {elapsed_total} min")

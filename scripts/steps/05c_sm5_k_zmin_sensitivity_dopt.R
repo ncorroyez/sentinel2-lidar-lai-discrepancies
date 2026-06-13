@@ -20,7 +20,7 @@
 #   04a — ATBD LAI estimated CSVs (hmin10)
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/05c_sm5_k_zmin_sensitivity_dopt.R")
+#   source("scripts/05c_sm5_k_zmin_sensitivity_dopt.R")
 # ---
 
 library("here")
@@ -28,9 +28,9 @@ library("data.table")
 library("terra")
 library("cli")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm5_metrics.R"))
-source(here::here("revision", "R", "sm5_dopt.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm5_metrics.R"))
+source(here::here("R", "sm5_dopt.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -42,9 +42,14 @@ name_strategy   <- "LIDFa_lai_LMA_BROWN"
 nb_samples      <- 5000L
 h_min_pixel     <- 10L          # pixel selection threshold (fixed)
 k_ref           <- 0.5          # k used to compute the existing PAD CSVs
-k_values        <- seq(0.3, 0.8, by = 0.1)
+k_values        <- seq(0.5, 0.8, by = 0.05)
 z_min_values    <- c(2, 3, 5)   # metres above ground
 theta_values    <- c(0, 5, 10, 15, 20, 25, 30)  # scan angles in degrees
+
+# Pareto selection criteria — MUST match scripts/steps/06_sm5_select_dopt.R
+pareto_criteria    <- c("R", "RMSE", "Bias", "Slope")
+pareto_norm_method <- "minmax"
+# pareto_norm_method <- "max"
 
 out_dir <- file.path(paths$output, "intermediate", "sm5")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -59,13 +64,12 @@ if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = F
 load_site_norm_data <- function(site, norm) {
 
   gpkg_path <- file.path(
-    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+    paths$sampling, site,
     paste0("Sampling_", sampling_method,
            "_hmin", h_min_pixel,
            "_nbSamples_", nb_samples, ".GPKG")
   )
-  s2_csv <- here::here(
-    "revision", "output", "intermediate", "PROSAIL_Models",
+  s2_csv <- file.path(paths$output, "intermediate", "PROSAIL_Models",
     site, name_strategy, "atbd",
     paste0("LAI_estimated_atbd_", sampling_method,
            "_hmin", h_min_pixel,
@@ -96,7 +100,7 @@ load_site_norm_data <- function(site, norm) {
 
   for (depth in depths) {
     lidar_csv <- file.path(
-      paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+      paths$sampling, site,
       paste0("PAD_", norm, "_Depth_", depth,
              "_Samples_", sampling_method,
              "_hmin", h_min_pixel,
@@ -269,7 +273,9 @@ for (k_val in k_values) {
     sub <- kt_dt[k == k_val & theta == theta_val & Norm %in% norms_select]
     if (nrow(sub) == 0L) next
     d <- select_dopt(sub, methods = "pareto", max_depth = h_min_pixel,
-                     prosail_filter = "ATBD")
+                     prosail_filter = "ATBD",
+                     pareto_criteria    = pareto_criteria,
+                     pareto_norm_method = pareto_norm_method)
     d[method_dopt == "pareto", `:=`(k = k_val, theta = theta_val)]
     dopt_kt_rows <- c(dopt_kt_rows, list(d[method_dopt == "pareto"]))
   }
@@ -296,7 +302,9 @@ for (z_min_val in z_min_values) {
   sub <- zmin_dt[z_min == z_min_val & Norm %in% norms_select]
   if (nrow(sub) == 0L) next
   d <- select_dopt(sub, methods = "pareto", max_depth = h_min_pixel,
-                   prosail_filter = "ATBD")
+                   prosail_filter = "ATBD",
+                   pareto_criteria    = pareto_criteria,
+                     pareto_norm_method = pareto_norm_method)
   d[method_dopt == "pareto", z_min := z_min_val]
   dopt_zmin_rows <- c(dopt_zmin_rows, list(d[method_dopt == "pareto"]))
 }

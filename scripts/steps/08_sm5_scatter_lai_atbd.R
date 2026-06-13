@@ -12,7 +12,7 @@
 #                    s2lai_{date}_atbd_res_10_m.tif
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/07_sm5_scatter_lai_atbd.R")
+#   source("scripts/07_sm5_scatter_lai_atbd.R")
 # ---
 
 library("here")
@@ -22,8 +22,8 @@ library("ggplot2")
 library("patchwork")
 library("cli")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm5_metrics.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm5_metrics.R"))
 
 # ── Site metadata ─────────────────────────────────────────────────────────────
 
@@ -34,6 +34,19 @@ site_meta <- list(
 )
 sites  <- names(site_meta)
 xy_lim <- c(0, 15)
+
+# k rescaling — `lidarlai_res_10_m.tif` was computed with k_ref = 0.5
+# (Bouvier default at PAD precomputation); this study uses k_select = 0.65.
+# Rescaling factor for LAI_ALS at nadir (theta = 0): k_ref / k_select.
+# Applied to LAI_ALS only — LAI_S2 from PROSAIL inversion is independent of k.
+k_ref        <- 0.5
+k_select     <- 0.65
+k_scale      <- k_ref / k_select   # ≈ 0.7692
+
+# Toggle the LAI distribution histogram inset in each scatter panel.
+# TRUE  = inset drawn (top-left of the panel area)
+# FALSE = no inset (clean scatter only)
+show_inset_histogram <- FALSE
 
 # ── Load all-pixel paired data from rasters ───────────────────────────────────
 
@@ -66,7 +79,7 @@ load_raster_pairs <- function(site) {
     r_s2 <- terra::resample(r_s2, r_als, method = "bilinear")
   }
 
-  als_v <- terra::values(r_als, mat = FALSE)
+  als_v <- terra::values(r_als, mat = FALSE) * k_scale   # rescale to k_select
   s2_v  <- terra::values(r_s2,  mat = FALSE)
 
   valid <- !is.na(als_v) & !is.na(s2_v) & als_v >= 0 & s2_v >= 0
@@ -85,7 +98,8 @@ dt <- data.table::rbindlist(lapply(sites, load_raster_pairs), use.names = TRUE)
 
 stats_dt <- dt[, {
   m   <- compute_metrics_s2_lidar(LAI_S2, LAI_ALS)
-  fit <- stats::lm(LAI_ALS ~ LAI_S2)
+  # Project-wide convention: lm(s2 ~ lidar). Matches the Slope in all CSVs.
+  fit <- stats::lm(LAI_S2 ~ LAI_ALS)
   a   <- round(stats::coef(fit)[[2L]], 2)
   b   <- round(stats::coef(fit)[[1L]], 2)
   list(
@@ -157,16 +171,15 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
                           show_legend = FALSE) {
   site_dt  <- dt[Site == site_name]
   st       <- stats_dt[Site == site_name]
-  n_obs    <- format(nrow(site_dt), big.mark = ",")
 
-  # Annotation: top-right, one metric per line
-  x_ann <- 14.6
+  # Annotation: top-left, one metric per line (hjust = 0)
+  x_ann <- 0.4
   y_top <- 14.65
-  dy    <- 1.00          # inter-line spacing
-  sz    <- 4.5           # text size
+  dy    <- 1.20          # inter-line spacing
+  sz    <- 5.5           # text size
 
   p <- ggplot2::ggplot(site_dt,
-                        ggplot2::aes(x = LAI_S2, y = LAI_ALS)) +
+                        ggplot2::aes(x = LAI_ALS, y = LAI_S2)) +
     ggplot2::geom_bin2d(bins = 400) +
     ggplot2::geom_smooth(method = "lm", formula = y ~ x,
                           se = FALSE, colour = "firebrick",
@@ -191,39 +204,34 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
     ggplot2::annotate("text",
       x = x_ann, y = y_top,
       label = paste0("y = ", st$a, "x", st$b_str),
-      hjust = 1, vjust = 1, size = sz, colour = "black"
+      hjust = 0, vjust = 1, size = sz, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = x_ann, y = y_top - dy,
       label = paste0("RMSE = ", st$RMSE),
-      hjust = 1, vjust = 1, size = sz, colour = "black"
+      hjust = 0, vjust = 1, size = sz, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = x_ann, y = y_top - 2 * dy,
       label = paste0("Bias = ", st$Bias),
-      hjust = 1, vjust = 1, size = sz, colour = "black"
+      hjust = 0, vjust = 1, size = sz, colour = "black"
     ) +
     ggplot2::annotate("text",
       x = x_ann, y = y_top - 3 * dy,
       label = paste0("italic(r)~'= ", st$r, "'"),
-      hjust = 1, vjust = 1, size = sz, colour = "black",
+      hjust = 0, vjust = 1, size = sz, colour = "black",
       parse = TRUE
     ) +
     ggplot2::annotate("text",
       x = x_ann, y = y_top - 4 * dy,
       label = paste0("R^2~'= ", st$R2, "'"),
-      hjust = 1, vjust = 1, size = sz, colour = "black",
+      hjust = 0, vjust = 1, size = sz, colour = "black",
       parse = TRUE
-    ) +
-    ggplot2::annotate("text",
-      x = 14.6, y = 0.3,
-      label = paste0("n = ", n_obs),
-      hjust = 1, vjust = 0, size = 3.2, colour = "black"
     ) +
     ggplot2::labs(
       title = site_name,
-      x     = if (show_x) expression(LAI[S2_ATBD]) else NULL,
-      y     = if (show_y) expression(LAI[ALS]) else NULL
+      x     = if (show_x) expression(LAI[ALS]) else NULL,
+      y     = if (show_y) expression(LAI[S2_ATBD]) else NULL
     ) +
     ggplot2::theme_bw(base_size = 13) +
     ggplot2::theme(
@@ -236,10 +244,12 @@ make_scatter <- function(site_name, show_y = TRUE, show_x = TRUE,
                            ggplot2::element_text()
     )
 
-  # Inset histogram: bottom-right (55-100% x, 0-48% y of panel area)
+  # Inset histogram: top-right (49-100% x, 49-100% y of panel area).
+  # Stat annotations now sit at top-left, so the top-right is free.
+  if (!isTRUE(show_inset_histogram)) return(p)
   h <- make_hist_inset(site_name)
   p + patchwork::inset_element(h, left = 0.487, right = 1.0,
-                                 bottom = 0.0,  top  = 0.513,
+                                 bottom = 0.487, top   = 1.0,
                                  align_to = "panel")
 }
 
@@ -255,7 +265,7 @@ fig <- (p1 | p2 | p3)
 
 # ── Save ───────────────────────────────────────────────────────────────────────
 
-out_dir  <- file.path(paths$output, "figures", "sm5")
+out_dir  <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 

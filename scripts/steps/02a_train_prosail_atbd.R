@@ -8,18 +8,18 @@
 #         (script 06) — it is NOT the final inversion model.
 #
 # Output: one RDS per site at:
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/atbd/LIDFa=1_lai=1_LMA=1_BROWN=1.rds
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/steps/02a_train_prosail_atbd.R")
+#   source("scripts/steps/02a_train_prosail_atbd.R")
 # ---
 
 library("here")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_lut.R"))
-source(here::here("revision", "R", "get_s2_angles.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_lut.R"))
+source(here::here("R", "get_s2_angles.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -66,10 +66,9 @@ for (site in sites) {
 for (site in sites) {
 
   cat("\n── Training ATBD SVR for site:", site, "──\n")
-  t_start <- Sys.time()
+  t0_site <- Sys.time()
 
-  models_dir <- here::here(
-    "revision", "output", "intermediate", "PROSAIL_Models",
+  models_dir <- file.path(paths$output, "intermediate", "PROSAIL_Models",
     site, name_strategy, "atbd"
   )
   if (!dir.exists(models_dir))
@@ -87,7 +86,7 @@ for (site in sites) {
   )
 
   cat("Model saved to:", models_dir, "\n")
-  cat("Elapsed:", round(difftime(Sys.time(), t_start, units = "mins"), 1), "min\n")
+  cat("Elapsed:", round(difftime(Sys.time(), t0_site, units = "mins"), 1), "min\n")
 }
 
 cat("\n── 02a done — ATBD SVR models ready for 04a ──\n")

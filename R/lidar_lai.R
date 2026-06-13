@@ -86,7 +86,7 @@ compute_pai <- function(z, h_min = 2, k = 0.5) {
 #' Bouvier et al. 2015).
 #'
 #' Two normalisation conventions are supported, matching the preprocessing
-#' functions in `revision/R/lidar_normalize.R`:
+#' functions in `R/lidar_normalize.R`:
 #' \describe{
 #'   \item{"dsm"}{CHM-based: point heights are referenced to the local canopy
 #'     top (output of `normalize_dsm()`). This is the convention used in the

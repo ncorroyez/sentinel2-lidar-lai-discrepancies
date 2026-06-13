@@ -1,34 +1,31 @@
-# config.yml.template — copier en config.yml et adapter à votre environnement
+# config.yml.template — copy to config.yml and adapt to your environment.
 #
-# Ne PAS versionner config.yml (il est dans .gitignore).
-# Ce template est la référence versionnée.
+# Do NOT version config.yml (it is in .gitignore).
+# This template is the versioned reference.
 #
-# Pour basculer vers le serveur SMB : changer "profile: local" en "profile: smb"
-# et ajuster les chemins du bloc smb si votre point de montage diffère.
+# Most users only need the `local` profile: point data_root to the directory
+# where you extracted data_bundle.zip, and output_root to where you want
+# intermediate outputs and figures.
 
-profile: local   # "local" ou "smb"
+profile: local
 
 profiles:
 
-  # ── Option A : données locales ─────────────────────────────────────────────
+  # ── Default: local data bundle ──────────────────────────────────────────────
   local:
-    data_root:   /CHANGER/VERS/NC_Full/revision/data
-    output_root: /CHANGER/VERS/NC_Full/revision/output
+    data_root:   /CHANGE/TO/repo/data
+    output_root: /CHANGE/TO/repo/output
     dirs:
       raw_data:      raw
       ext_results:   results
       prosail_lidar: prosail_lidar
-      prosail_codes: ../../PROSAIL-Optimization/02_CODES
 
-  # ── Option B : serveur INRAE partagé (SMB) ─────────────────────────────────
-  # Le point de montage GVfs par défaut sous GNOME Linux :
-  #   /run/user/1001/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse
-  # Adapter si monté autrement (ex : /mnt/pulse ou via autofs).
+  # ── Internal: INRAE SMB share (authors only) ────────────────────────────────
+  # Reproduces the full data layout from the originating filesystem.
   smb:
     data_root:   /run/user/1001/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez/NC_Full
-    output_root: /run/user/1001/gvfs/smb-share:server=pnas3.stockage.inrae.fr,share=mo-mtd-pulse/root/_PROJETS/2023_2026_These_Nathan_Corroyez/NC_Full/revision/output
+    output_root: /CHANGE/TO/repo/output
     dirs:
       raw_data:      01_DATA
       ext_results:   03_RESULTS
       prosail_lidar: PROSAIL-Optimization/01_DATA
-      prosail_codes: PROSAIL-Optimization/02_CODES

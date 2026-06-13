@@ -11,14 +11,14 @@
 #           04a  apply_prosail_atbd — LAI_S2_atbd from ATBD SVR
 #
 #         Outputs:
-#           revision/output/intermediate/PROSAIL_Models/{site}/
+#           output/intermediate/PROSAIL_Models/{site}/
 #             LIDFa_lai_LMA_BROWN/atbd/LIDFa=1_lai=1_LMA=1_BROWN=1.rds
 #           03_RESULTS/{site}/PROSAIL_Optimization/sampling/
 #             Sampling_*.GPKG, S2_reflectance_*.csv, PAD_*.csv,
 #             LAI_estimated_atbd_*.csv
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/01_prepare.R")
+#   source("scripts/01_prepare.R")
 # ---
 
 library(here)
@@ -37,10 +37,10 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/02a_train_prosail_atbd.R")
-step("revision/scripts/steps/03a_sample_s2_pixels.R")
-step("revision/scripts/steps/03b_extract_lidar_at_samples.R")
-step("revision/scripts/steps/04a_apply_prosail_atbd.R")
+step("scripts/steps/02a_train_prosail_atbd.R")
+step("scripts/steps/03a_sample_s2_pixels.R")
+step("scripts/steps/03b_extract_lidar_at_samples.R")
+step("scripts/steps/04a_apply_prosail_atbd.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("01_prepare done — {elapsed_total} min")

@@ -2,26 +2,31 @@
 # title:  06_sm5_select_dopt.R
 # desc:   Orchestration — selects the optimal canopy integration depth (d_opt)
 #         by four methods (pearson, rmse, bias, pareto) and writes two CSV
-#         files to revision/output/intermediate/sm5/:
+#         files to output/intermediate/sm5/:
 #           - dopt_reference.csv  (ATBD == TRUE columns only)
 #           - dopt_all.csv        (all PROSAIL columns)
 #
-#         Calls select_dopt() from revision/R/sm5_dopt.R, which addresses
+#         Calls select_dopt() from R/sm5_dopt.R, which addresses
 #         reviewer comments R3.minor.13 and R4.spec.2.
 #
 #         Prerequisites:
 #           SM5 passe 1 — CSV must exist at:
-#             revision/output/intermediate/sm5/
+#             output/intermediate/sm5/
 #             all_results_combined_LIDFa_lai_LMA_BROWN.csv
-#           Run revision/scripts/05_sm5_compute_metrics.R first.
+#           Run scripts/05_sm5_compute_metrics.R first.
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/06_sm5_select_dopt.R")
+#   source("scripts/06_sm5_select_dopt.R")
 # ---
 
 # ── Source ─────────────────────────────────────────────────────────────────────
 
-source(here::here("revision", "R", "sm5_dopt.R"))
+library(here)
+library(data.table)
+library(cli)
+
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm5_dopt.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -34,12 +39,28 @@ h_min_select  <- 10L
 # k_select = 0.5 and theta_select = 0 → use 05a's CSV
 # any other (k, theta)                → use 05c's kt CSV (h_min = 10 only)
 k_ref         <- 0.5
-k_select      <- 0.6
+k_select      <- 0.65
 theta_select  <- 0
 
 # "pool"    — use pooled-pixel combined row ("Sites combined")
 # "average" — compute site-averaged metrics post-hoc ("Sites averaged")
 combined_mode <- "average"
+
+# Pareto criteria — subset of c("R", "RMSE", "Bias", "Slope").
+# Default uses all 4. Drop "Slope" if you want |Slope-1| to NOT influence
+# Pareto selection (avoids picking compromise configs that have small
+# |Slope-1| but large Bias).
+pareto_criteria <- c("R", "RMSE", "Bias", "Slope")
+# pareto_criteria <- c("R", "RMSE", "Bias")
+
+# Pareto normalisation method — "max" (default) or "minmax".
+#   "max"    : m / max(m)              → preserves absolute ratios; a narrow-
+#                                         range criterion stays narrow.
+#   "minmax" : (m - min) / (max - min) → strict [0,1] but AMPLIFIES narrow
+#                                         ranges (a 0.03 gap on R becomes as
+#                                         wide as a 1.0 gap on RMSE).
+pareto_norm_method <- "minmax"
+# pareto_norm_method <- "max"
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 
@@ -47,22 +68,22 @@ use_reference <- isTRUE(k_select == k_ref && theta_select == 0)
 
 if (use_reference) {
   sm5_csv <- here::here(
-    "revision", "output", "intermediate", "sm5",
+    "output", "intermediate", "sm5",
     "all_results_atbd_LIDFa_lai_LMA_BROWN.csv"
   )
   if (!file.exists(sm5_csv))
     stop("SM5a ATBD CSV not found:\n  ", sm5_csv,
-         "\nRun revision/scripts/05a_sm5_compute_metrics_atbd.R first.")
+         "\nRun scripts/05a_sm5_compute_metrics_atbd.R first.")
   metrics_dt <- data.table::fread(sm5_csv)
   metrics_dt <- metrics_dt[h_min == h_min_select & grepl("keepTrees", Norm)]
 } else {
   kt_csv <- here::here(
-    "revision", "output", "intermediate", "sm5",
+    "output", "intermediate", "sm5",
     "kt_sensitivity_atbd_LIDFa_lai_LMA_BROWN.csv"
   )
   if (!file.exists(kt_csv))
     stop("kt CSV not found:\n  ", kt_csv,
-         "\nRun revision/scripts/05c_sm5_k_zmin_sensitivity_dopt.R first.")
+         "\nRun scripts/05c_sm5_k_zmin_sensitivity_dopt.R first.")
   dt_kt <- data.table::fread(kt_csv)
   metrics_dt <- dt_kt[k == k_select & theta == theta_select &
                         grepl("keepTrees", Norm)]
@@ -108,31 +129,39 @@ t0 <- proc.time()
 
 dopt_reference <- select_dopt(
   metrics_dt,
-  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
-  max_depth      = h_min_select,
-  prosail_filter = "ATBD"
+  methods         = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth       = h_min_select,
+  prosail_filter  = "ATBD",
+  pareto_criteria    = pareto_criteria,
+  pareto_norm_method = pareto_norm_method
 )
 
 dopt_all <- select_dopt(
   metrics_dt,
-  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
-  max_depth      = h_min_select,
-  prosail_filter = "all"
+  methods         = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth       = h_min_select,
+  prosail_filter  = "all",
+  pareto_criteria    = pareto_criteria,
+  pareto_norm_method = pareto_norm_method
 )
 
 # No max_depth constraint — d_opt free to go up to 38 m
 dopt_reference_free <- select_dopt(
   metrics_dt,
-  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
-  max_depth      = NULL,
-  prosail_filter = "ATBD"
+  methods         = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth       = NULL,
+  prosail_filter  = "ATBD",
+  pareto_criteria    = pareto_criteria,
+  pareto_norm_method = pareto_norm_method
 )
 
 dopt_all_free <- select_dopt(
   metrics_dt,
-  methods        = c("pearson", "rmse", "bias", "slope", "pareto"),
-  max_depth      = NULL,
-  prosail_filter = "all"
+  methods         = c("pearson", "rmse", "bias", "slope", "pareto"),
+  max_depth       = NULL,
+  prosail_filter  = "all",
+  pareto_criteria    = pareto_criteria,
+  pareto_norm_method = pareto_norm_method
 )
 
 elapsed <- round((proc.time() - t0)[["elapsed"]], 1)

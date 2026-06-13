@@ -13,17 +13,17 @@
 #         this script uses DSM_SD throughout.
 #
 #         Reads (read-only):
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #             dsm_sd_res_10_m.tif          (produced by script 14)
 #           {ext_results}/{site}/Metrics/Deciduous_Only/
 #             lidarlai_res_10_m.tif
 #             max_res_10_m.tif
 #
 #         Outputs:
-#           revision/output/figures/reviewers/als_metrics_scatter.pdf/.png
+#           output/figures/als_metrics_scatter.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/26_plot_als_metrics_scatter.R")
+#   source("scripts/26_plot_als_metrics_scatter.R")
 # ---
 
 library(here)
@@ -33,13 +33,13 @@ library(patchwork)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites <- c("Aigoual", "Blois", "Mormal")
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── Load rasters and extract values ────────────────────────────────────────────

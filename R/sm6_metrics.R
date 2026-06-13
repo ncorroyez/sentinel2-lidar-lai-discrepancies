@@ -1,10 +1,13 @@
 # ---
 # title:  sm6_metrics.R
 # desc:   Compute per-class LAI comparison metrics for SM6b.
-#         Exposes compute_metrics_by_class().
+#         Exposes compute_metrics_by_class() and sample_indices_uniform_lai().
 #
-#         Refactor of compute_metrics v2 in:
-#         02_CODES/three_factors_analysis_final.R lines 210-296.
+#         Within each (site × heterogeneity class), pixels are sampled
+#         uniformly on LAI_ALS in [2, class-specific max LAI_ALS]; the same
+#         indices are then used to evaluate all three LAI combinations.
+#         This mirrors the stratified-uniform LAI_ALS sampling described in
+#         the manuscript SM6 methodology.
 #
 #         Regression convention: lm(s2 ~ lidar) — s2 is the response,
 #         lidar is the predictor. Harmonized with SM5 convention as of
@@ -12,6 +15,114 @@
 #
 #         Extension relative to legacy: R2 = r^2 is added (not in legacy).
 # ---
+
+# ── sample_indices_uniform_lai ────────────────────────────────────────────────
+
+#' @title Uniform-LAI sample indices
+#'
+#' @description Build row indices for a sample with approximately uniform
+#'   LAI_ALS distribution between \code{lai_min} and \code{floor(quantile(
+#'   lai_values, lai_max_quantile))}. Bins are \code{bin_width}-wide
+#'   (1 unit by default, matching the manuscript). Values outside
+#'   [\code{lai_min}, upper bound] or NA are excluded.
+#'
+#' @param lai_values        Numeric vector of LAI_ALS values.
+#' @param n_target          Target sample size.
+#' @param lai_min           Lower bound (default 2 m²/m²).
+#' @param lai_max_quantile  Quantile used to derive the upper bound
+#'                          (default \code{0.98}). The upper bound is
+#'                          \code{floor(quantile)}. Set to \code{1} or
+#'                          \code{NULL} to use the observed max.
+#' @param bin_width         LAI bin width (default 1.0; produces integer
+#'                          breaks from \code{lai_min} to \code{floor(p)}).
+#' @param seed              RNG seed.
+#'
+#' @return Integer vector of row indices into \code{lai_values}.
+#' @export
+sample_indices_uniform_lai <- function(lai_values, n_target,
+                                       lai_min = 2.0,
+                                       lai_max_quantile = 0.98,
+                                       bin_width = 1.0,
+                                       seed = 42L) {
+  if (length(lai_values) == 0L) return(integer(0))
+  set.seed(seed)
+
+  valid_lo <- !is.na(lai_values) & lai_values >= lai_min
+  if (sum(valid_lo) == 0L) return(integer(0))
+
+  if (is.null(lai_max_quantile) || lai_max_quantile >= 1) {
+    lai_max <- floor(max(lai_values[valid_lo]))
+  } else {
+    q <- as.numeric(stats::quantile(lai_values[valid_lo],
+                                     probs = lai_max_quantile,
+                                     na.rm = TRUE))
+    lai_max <- floor(q)
+  }
+
+  if (lai_max <= lai_min) return(which(valid_lo))
+
+  bin_edges <- seq(lai_min, lai_max, by = bin_width)
+  n_bins    <- length(bin_edges) - 1L
+  if (n_bins < 1L) return(which(valid_lo))
+
+  valid     <- valid_lo & lai_values <= lai_max
+  bin_idx   <- cut(lai_values, breaks = bin_edges,
+                   include.lowest = TRUE, labels = FALSE)
+  n_per_bin <- ceiling(n_target / n_bins)
+
+  out <- integer(0)
+  for (b in seq_len(n_bins)) {
+    pool <- which(valid & bin_idx == b)
+    if (length(pool) == 0L) next
+    take <- min(length(pool), n_per_bin)
+    out  <- c(out, if (length(pool) == take) pool else sample(pool, take))
+  }
+  out
+}
+
+
+# ── sample_uniform_lai_dt ─────────────────────────────────────────────────────
+
+#' @title Per-site uniform-LAI sample of a multi-site data.table
+#'
+#' @description Returns a sub-set of \code{dt} where, for each site,
+#'   pixels are sampled to approximate a uniform LAI_ALS distribution in
+#'   [\code{lai_min}, \code{floor(quantile(lai_als, lai_max_quantile))}].
+#'   This is the manuscript's site-level uniform-LAI sampling used as the
+#'   input to the SM6 heterogeneity classification.
+#'
+#' @param dt                 \code{data.table} with columns \code{site}
+#'                           and \code{lai_als}.
+#' @param n_target_per_site  Target sample size per site.
+#' @param lai_min            Lower bound (default 2).
+#' @param lai_max_quantile   Quantile defining the upper bound
+#'                           (default 0.98 → \code{floor(p98)}).
+#' @param bin_width          Bin width in LAI units (default 1).
+#' @param seed               Base RNG seed (offset per site).
+#'
+#' @return A \code{data.table} with the same columns as \code{dt}.
+#' @export
+sample_uniform_lai_dt <- function(dt, n_target_per_site,
+                                  lai_min = 2.0,
+                                  lai_max_quantile = 0.98,
+                                  bin_width = 1.0,
+                                  seed = 42L) {
+  sites <- unique(dt[["site"]])
+  out   <- vector("list", length(sites))
+  for (i in seq_along(sites)) {
+    sub <- dt[site == sites[i]]
+    idx <- sample_indices_uniform_lai(
+      lai_values       = sub$lai_als,
+      n_target         = n_target_per_site,
+      lai_min          = lai_min,
+      lai_max_quantile = lai_max_quantile,
+      bin_width        = bin_width,
+      seed             = seed + i - 1L
+    )
+    out[[i]] <- sub[idx]
+  }
+  data.table::rbindlist(out)
+}
 
 #' @title Compute LAI comparison metrics by heterogeneity class
 #'
@@ -56,18 +167,19 @@
 #' @param metric_source Character. Label for the heterogeneity metric source,
 #'   \code{"DSM"} or \code{"CHM"}. Stored in the output
 #'   \code{metric_source} column.
-#' @param downsample_n  Integer or \code{NULL}. Maximum number of complete
-#'   pairs to use per (site × combination × class) group before computing
-#'   metrics. \code{NULL} (default) uses all available pixels — this is the
-#'   recommended default for the refactored pipeline. Pass
-#'   \code{downsample_n = 5000L} to replicate the legacy sampling strategy
-#'   from \code{three_factors_analysis_final.R} lines 229-234
-#'   (\code{slice_sample(n = 5000)}) for direct comparability with results
-#'   in the submitted manuscript. The \code{n >= 10} filter is applied
-#'   \emph{after} downsampling.
-#' @param seed          Integer. Random seed set via \code{set.seed()} before
-#'   any downsampling. Ignored when \code{downsample_n} is \code{NULL}.
-#'   Default \code{42L} (matches \code{set.seed(42)} in the legacy).
+#' @param uniform_sample_n  Integer or \code{NULL}. If \code{NULL}
+#'   (recommended for SM6: sample once site-level via
+#'   \code{sample_uniform_lai_dt()} BEFORE this call, then pass the
+#'   sampled \code{dt} here), no further sampling is done. If an integer,
+#'   additionally sample uniformly on \code{lai_als} within each class
+#'   using \code{sample_indices_uniform_lai()}.
+#' @param lai_min          Lower bound on LAI_ALS for the per-class
+#'   sample (default \code{2.0}). Ignored when
+#'   \code{uniform_sample_n} is \code{NULL}.
+#' @param lai_max_quantile Quantile defining the upper bound for the
+#'   per-class sample (default \code{0.98}).
+#' @param bin_width        Per-class bin width (default \code{1}).
+#' @param seed             Integer. RNG seed (default \code{42L}).
 #'
 #' @return A \code{data.table} with one row per
 #'   (site × metric_source × combination × het_class):
@@ -103,50 +215,81 @@
 #'
 #' @export
 compute_metrics_by_class <- function(dt, combinations, metric_source,
-                                     downsample_n = NULL, seed = 42L,
+                                     uniform_sample_n = NULL,
+                                     lai_min = 2.0,
+                                     lai_max_quantile = 0.98,
+                                     bin_width = 1.0,
+                                     seed    = 42L,
                                      include_total = TRUE) {
   sites       <- unique(dt[["site"]])
   het_classes <- c("Low", "Medium", "High")
-
-  if (!is.null(downsample_n)) {
-    set.seed(seed)
-  }
 
   n_rows <- length(sites) * length(combinations) * length(het_classes)
   rows   <- vector("list", n_rows)
   idx    <- 0L
 
+  # Accumulator: for each site, pooled sampled indices across the 3 classes.
+  # Used by the Total block so that Total = union(Low + Medium + High) on the
+  # SAMPLED pixels, not the full unsampled raster.
+  pooled_sampled <- vector("list", length(sites))
+  names(pooled_sampled) <- sites
+
   for (site_name in sites) {
     dt_site <- dt[site == site_name]
+    pooled_sampled[[site_name]] <- integer(0)
 
-    for (combo in combinations) {
-      lidar_col  <- combo$lidar_col
-      s2_col     <- combo$s2_col
-      combo_name <- combo$name
+    for (cls in het_classes) {
 
-      for (cls in het_classes) {
+      # ── Build a single uniform-LAI sample per (site × class) ────────────────
+      in_class_idx <- which(!is.na(dt_site[["het_class"]]) &
+                              dt_site[["het_class"]] == cls)
+
+      if (length(in_class_idx) == 0L) {
+        for (combo in combinations) {
+          idx <- idx + 1L
+          rows[[idx]] <- data.table::data.table(
+            site = site_name, metric_source = metric_source,
+            combination = combo$name, het_class = cls,
+            n = 0L, R = NA_real_, R2 = NA_real_, RMSE = NA_real_,
+            Bias = NA_real_, Bias_pvalue = NA_real_,
+            Slope = NA_real_, Slope_pvalue = NA_real_
+          )
+        }
+        next
+      }
+
+      lai_class <- dt_site[["lai_als"]][in_class_idx]
+
+      if (is.null(uniform_sample_n)) {
+        sampled_idx <- in_class_idx
+      } else {
+        sub <- sample_indices_uniform_lai(
+          lai_values       = lai_class,
+          n_target         = uniform_sample_n,
+          lai_min          = lai_min,
+          lai_max_quantile = lai_max_quantile,
+          bin_width        = bin_width,
+          seed             = seed + match(cls, het_classes) - 1L
+        )
+        sampled_idx <- in_class_idx[sub]
+      }
+
+      # Accumulate for the Total row
+      pooled_sampled[[site_name]] <- c(pooled_sampled[[site_name]], sampled_idx)
+
+      # ── Evaluate each combo on the shared sample ────────────────────────────
+      for (combo in combinations) {
         idx <- idx + 1L
+        lidar_col  <- combo$lidar_col
+        s2_col     <- combo$s2_col
+        combo_name <- combo$name
 
-        # ── Pair-wise complete cases for this class ───────────────────────────
-        in_class <- dt_site[["het_class"]] == cls
-        in_class[is.na(in_class)] <- FALSE
-
-        lidar_raw <- dt_site[[lidar_col]][in_class]
-        s2_raw    <- dt_site[[s2_col]][in_class]
+        lidar_raw <- dt_site[[lidar_col]][sampled_idx]
+        s2_raw    <- dt_site[[s2_col]][sampled_idx]
         complete  <- !is.na(lidar_raw) & !is.na(s2_raw)
 
         lidar_vec <- lidar_raw[complete]
         s2_vec    <- s2_raw[complete]
-
-        # ── Optional downsampling ─────────────────────────────────────────────
-        # downsample_n = NULL  → use all pixels (default refactor behaviour)
-        # downsample_n = 5000  → replicates legacy slice_sample(n = 5000)
-        if (!is.null(downsample_n) && length(lidar_vec) > downsample_n) {
-          idx_sample <- sample(length(lidar_vec), downsample_n)
-          lidar_vec  <- lidar_vec[idx_sample]
-          s2_vec     <- s2_vec[idx_sample]
-        }
-
         n_obs     <- length(lidar_vec)
 
         if (n_obs < 10L) {
@@ -217,20 +360,24 @@ compute_metrics_by_class <- function(dt, combinations, metric_source,
     }
   }
 
-  # ── Total rows: metrics over all pixels, no class filter ─────────────────
+  # ── Total rows: pooled sampled pixels across (Low + Medium + High) ───────
+  # Same sampling discipline as the per-class rows: Total = union of the
+  # three class samples. This keeps Total comparable with the class rows
+  # (n ≈ sum of class n) rather than the full unsampled raster.
   if (include_total) {
     total_rows <- vector("list", length(sites) * length(combinations))
     tidx <- 0L
     for (site_name in sites) {
-      dt_site <- dt[site == site_name]
+      dt_site     <- dt[site == site_name]
+      sampled_idx <- pooled_sampled[[site_name]]
       for (combo in combinations) {
         tidx       <- tidx + 1L
         lidar_col  <- combo$lidar_col
         s2_col     <- combo$s2_col
         combo_name <- combo$name
 
-        lidar_raw <- dt_site[[lidar_col]]
-        s2_raw    <- dt_site[[s2_col]]
+        lidar_raw <- dt_site[[lidar_col]][sampled_idx]
+        s2_raw    <- dt_site[[s2_col]][sampled_idx]
         complete  <- !is.na(lidar_raw) & !is.na(s2_raw)
         lidar_vec <- lidar_raw[complete]
         s2_vec    <- s2_raw[complete]

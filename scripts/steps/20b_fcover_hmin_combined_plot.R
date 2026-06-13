@@ -9,21 +9,24 @@
 #         parameter's reference value (fCover = 0.90; h_min = 2 m).
 #
 #         Reads:
-#           revision/output/intermediate/reviewers/fcover_sensitivity_atbd.csv
-#           revision/output/intermediate/reviewers/h_min_sensitivity_atbd.csv
+#           output/intermediate/reviewers/fcover_sensitivity_atbd.csv
+#           output/intermediate/reviewers/h_min_sensitivity_atbd.csv
 #
 #         Output:
-#           revision/output/figures/sm_fcover_hmin_combined.pdf
-#           revision/output/figures/sm_fcover_hmin_combined.png
+#           output/figures/sm_fcover_hmin_combined.pdf
+#           output/figures/sm_fcover_hmin_combined.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/20b_fcover_hmin_combined_plot.R")
+#   source("scripts/20b_fcover_hmin_combined_plot.R")
 # ---
 
 library(here)
 library(data.table)
 library(ggplot2)
 library(patchwork)
+library(scales)
+
+source(here::here("R", "paths.R"))
 
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
@@ -40,10 +43,11 @@ site_order  <- c("Aigoual", "Blois", "Mormal")
 site_colors <- c(Aigoual = "#E69F00", Blois = "#56B4E9", Mormal = "#009E73")
 
 metric_list <- list(
-  list(col = "R",     label = expression(italic(r))),
-  list(col = "RMSE",  label = expression(RMSE~(m^2~m^{-2}))),
-  list(col = "Bias",  label = expression(Bias~(m^2~m^{-2}))),
-  list(col = "Slope", label = expression(Slope))
+  list(col = "R",        label = expression(italic(r))),
+  list(col = "RMSE",     label = expression(RMSE~(m^2~m^{-2}))),
+  list(col = "Bias",     label = expression(Bias~(m^2~m^{-2}))),
+  list(col = "Slope",    label = expression(Slope)),
+  list(col = "n_pixels", label = expression(n[pixels]))
 )
 
 theme_sens <- ggplot2::theme_bw(base_size = 10) +
@@ -79,6 +83,10 @@ make_fcover_panel <- function(col, ylab, show_legend = FALSE) {
                                 colour = "grey40", linewidth = 0.3)
   if (col == "Slope") p <- p + ggplot2::geom_hline(yintercept = 1,
                                 colour = "grey40", linewidth = 0.3)
+  if (col == "n_pixels")
+    p <- p + ggplot2::scale_y_continuous(
+      labels = scales::label_number(scale_cut = scales::cut_short_scale())
+    )
   p
 }
 
@@ -106,10 +114,14 @@ make_hmin_panel <- function(col, ylab, show_legend = FALSE) {
                                 colour = "grey40", linewidth = 0.3)
   if (col == "Slope") p <- p + ggplot2::geom_hline(yintercept = 1,
                                 colour = "grey40", linewidth = 0.3)
+  if (col == "n_pixels")
+    p <- p + ggplot2::scale_y_continuous(
+      labels = scales::label_number(scale_cut = scales::cut_short_scale())
+    )
   p
 }
 
-# ── Assemble 2 × 4 plate ──────────────────────────────────────────────────────
+# ── Assemble 2 × 5 plate ──────────────────────────────────────────────────────
 
 row1 <- lapply(seq_along(metric_list), function(i) {
   m <- metric_list[[i]]
@@ -122,8 +134,8 @@ row2 <- lapply(seq_along(metric_list), function(i) {
 })
 
 fig <- (
-  (row1[[1]] | row1[[2]] | row1[[3]] | row1[[4]]) /
-  (row2[[1]] | row2[[2]] | row2[[3]] | row2[[4]])
+  (row1[[1]] | row1[[2]] | row1[[3]] | row1[[4]] | row1[[5]]) /
+  (row2[[1]] | row2[[2]] | row2[[3]] | row2[[4]] | row2[[5]])
 ) +
   patchwork::plot_layout(guides = "collect") +
   patchwork::plot_annotation() &
@@ -131,7 +143,7 @@ fig <- (
 
 # ── Save ───────────────────────────────────────────────────────────────────────
 
-w_cm <- 28
+w_cm <- 34
 h_cm <- 14
 
 ggplot2::ggsave(file.path(out_dir, "sm_fcover_hmin_combined.pdf"),
@@ -142,3 +154,25 @@ ggplot2::ggsave(file.path(out_dir, "sm_fcover_hmin_combined.png"),
 cli::cli_alert_success(
   "Saved sm_fcover_hmin_combined.pdf/png ({w_cm}×{h_cm} cm)"
 )
+
+# ── Sample-size summary: n_pixels per (site x fCover threshold) ───────────────
+# Useful for the SM A.1 paragraph that reports per-site pixel counts at the
+# retained fCover = 90% threshold. Both printed to the console and written to
+# a small CSV for direct copy into the manuscript.
+
+if ("n_pixels" %in% names(dt_fc)) {
+  cli::cli_h2("Sample size (n_pixels) per site x fCover threshold")
+  n_wide <- data.table::dcast(
+    dt_fc[, .(site, fcover_threshold, n_pixels)],
+    site ~ fcover_threshold,
+    value.var = "n_pixels"
+  )
+  data.table::setnames(n_wide, old = setdiff(names(n_wide), "site"),
+                       new = paste0("fcover_",
+                                    setdiff(names(n_wide), "site")))
+  print(n_wide, row.names = FALSE)
+
+  n_csv <- file.path(int_dir, "fcover_n_pixels_summary.csv")
+  data.table::fwrite(n_wide, n_csv)
+  cli::cli_alert_success("Sample-size summary written: {n_csv}")
+}

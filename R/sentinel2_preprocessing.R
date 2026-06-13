@@ -64,32 +64,55 @@ download_s2_cdse <- function(site,
                              date,
                              aoi_path,
                              output_dir,
+                             tiling_grid = NULL,
+                             mode = c("reflectance", "geometry"),
                              credentials_env = c("CDSE_ID", "CDSE_SECRET")) {
-  id     <- Sys.getenv(credentials_env[1])
-  secret <- Sys.getenv(credentials_env[2])
-  if (nchar(id) == 0L || nchar(secret) == 0L) {
+  mode <- match.arg(mode)
+  # preprocS2 >= 2.6 reads CDSE OAuth creds internally via get_OAuth_client()
+  # (OAUTH_CDSE_ID / OAUTH_CDSE_PWD, or PREPROCS2_CDSE_ID / PREPROCS2_CDSE_SECRET).
+  oc <- preprocS2::get_OAuth_client()
+  if (nchar(oc$id) == 0L || nchar(oc$pwd) == 0L) {
     stop(
-      "download_s2_cdse(): CDSE credentials not found in environment. ",
-      "Set ", credentials_env[1], " and ", credentials_env[2],
-      " in ~/.Renviron and restart R."
+      "download_s2_cdse(): CDSE OAuth credentials not found in environment. ",
+      "Set OAUTH_CDSE_ID / OAUTH_CDSE_PWD (or PREPROCS2_CDSE_ID / ",
+      "PREPROCS2_CDSE_SECRET) in ~/.Renviron and restart R."
     )
   }
-  authentication <- list(id = id, pwd = secret)
 
   if (!dir.exists(output_dir))
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  preprocS2::get_s2_raster(
-    aoi_path          = aoi_path,
-    datetime          = date,
-    output_dir        = output_dir,
-    path_S2tilinggrid = NULL,
-    overwrite         = TRUE,
-    geomAcq           = TRUE,
-    authentication    = authentication,
-    siteName          = site,
-    keepCRS           = TRUE
+  # preprocS2 2.6.7 API: stac provider + options list (auth handled internally).
+  # Pre-fill options via set_options_preprocS2() because get_s2_raster() reads
+  # options$nbCPU BEFORE applying defaults internally (would error otherwise).
+  #
+  # NOTE on geom_acq: combining geom_acq=TRUE (CDSE auth) with the MPC reflectance
+  # download in ONE call breaks (CDSE token poisons the MPC STAC request →
+  # 'text/plain' error). And CDSE's own STAC reflectance search is broken
+  # ('collections' param missing → HTTP 400). So we split: reflectance via MPC
+  # (geom_acq=FALSE, reliable), and geometry-of-acquisition via a separate CDSE
+  # pass (mode="geometry") in its own R session.
+  geom <- isTRUE(mode == "geometry")
+  provider <- if (geom) "cdse" else "mpc"
+  opts <- preprocS2::set_options_preprocS2(
+    fun = "get_s2_raster",
+    options = list(geom_acq = geom, overwrite = TRUE, cloudcover = 100)
   )
+  # Point to an existing tiling-grid .kml; check_s2_tiling_grid() auto-download
+  # is buggy when a tileS2_kml/ dir already holds >1 .kml (file.rename length err).
+  if (!is.null(tiling_grid)) opts$path_S2_tiling_grid <- tiling_grid
+
+  call_one <- function() preprocS2::get_s2_raster(
+    aoi_path = aoi_path, datetime = date, output_dir = output_dir,
+    site_name = site, stac_info = list(provider = provider), options = opts)
+
+  if (geom) {
+    # geometry tiffs are written before the (broken) CDSE collection search; the
+    # subsequent collection error is expected and ignored in this mode.
+    try(call_one(), silent = TRUE)
+  } else {
+    call_one()
+  }
   invisible(NULL)
 }
 

@@ -5,14 +5,14 @@
 #         data.table aggregation (avoids pixel_metrics issues with SMB catalogs).
 #         Applies correction multiplicatively to existing ladstack.tif.
 #
-# Outputs per site in revision/output/intermediate/scan_angle/{site}/:
+# Outputs per site in output/intermediate/scan_angle/{site}/:
 #   cos_theta_mean.tif       — correction raster C(x,y)
 #   lai_als_corrected.tif    — ladstack sum × C
 #
-# Figures in revision/output/figures/scan_angle/:
+# Figures in output/figures/:
 #   lai_correction_summary.png
 #
-# Run from NC_Full/:  source("revision/scripts/18_scan_angle_correction.R")
+# Run from NC_Full/:  source("scripts/18_scan_angle_correction.R")
 # ---
 
 library("here")
@@ -21,7 +21,7 @@ library("lidR")
 library("data.table")
 library("ggplot2")
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ ladstack_paths <- setNames(
 )
 
 out_root <- file.path(paths$output, "intermediate", "scan_angle")
-out_figs <- file.path(paths$output, "figures", "scan_angle")
+out_figs <- file.path(paths$output, "figures")
 for (d in c(file.path(out_root, sites), out_figs))
   if (!dir.exists(d)) dir.create(d, recursive = TRUE)
 

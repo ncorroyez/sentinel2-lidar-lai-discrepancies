@@ -5,11 +5,11 @@
 #         Reads fcover_sensitivity_atbd.csv produced by 18_fcover_sensitivity.R.
 #
 #         Output:
-#           revision/output/figures/sm_fcover_sensitivity.pdf
-#           revision/output/figures/sm_fcover_sensitivity.png
+#           output/figures/sm_fcover_sensitivity.pdf
+#           output/figures/sm_fcover_sensitivity.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/18c_fcover_sensitivity_plot.R")
+#   source("scripts/18c_fcover_sensitivity_plot.R")
 # ---
 
 library(here)
@@ -20,7 +20,7 @@ library(patchwork)
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
 in_csv  <- here::here(
-  "revision", "output", "intermediate", "reviewers",
+  "output", "intermediate", "reviewers",
   "fcover_sensitivity_atbd.csv"
 )
 out_dir <- file.path(paths$output, "figures")

@@ -25,7 +25,7 @@
 #                                         (rétrocompatibilité SM6b pipeline)
 #         Total: 7 files × 3 sites × 2 metrics = 42 writes.
 #
-#         Output root: revision/output/intermediate/sm6/{site}/
+#         Output root: output/intermediate/sm6/{site}/
 #
 #         Mask used:
 #           artifacts_deciduous_only_low_vegetation_majority_90_p_res_10_m.envi
@@ -42,15 +42,15 @@
 #         extended to multi-scale sweep for SM6a passe 2.
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/07_sm6_compute_heterogeneity.R")
+#   source("scripts/07_sm6_compute_heterogeneity.R")
 # ---
 
 library(here)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm6_heterogeneity.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm6_heterogeneity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 

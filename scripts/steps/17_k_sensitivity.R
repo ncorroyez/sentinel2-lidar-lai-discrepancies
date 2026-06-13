@@ -13,7 +13,7 @@
 #         3 sites, no heterogeneity stratification, no LAI_ALS_dopt.
 #
 #         Output:
-#           revision/output/intermediate/reviewers/k_theta_sensitivity_atbd.csv
+#           output/intermediate/reviewers/k_theta_sensitivity_atbd.csv
 #           126 rows (3 sites × 42 combinations), 17 columns:
 #             site, k_value, theta_deg, n_pixels,
 #             lai_als_{mean,median,p95,max},
@@ -27,7 +27,7 @@
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/s2lai_summer_atbd_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/17_k_sensitivity.R")
+#   source("scripts/17_k_sensitivity.R")
 # ---
 
 library(here)
@@ -35,13 +35,13 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "k_sensitivity.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "k_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites        <- c("Aigoual", "Blois", "Mormal")
-k_values     <- c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+k_values     <- seq(0.5, 0.8, by = 0.05)
 k_ref        <- 0.5                   # reference k embedded in ladstack_classic.tif
 theta_values <- c(0, 5, 10, 15, 20, 25, 30)  # degrees from nadir
 

@@ -45,7 +45,7 @@
 #' \dontrun{
 #' r  <- load_site_rasters(
 #'   "Blois", dopt_value = 4,
-#'   sm6a_dir = here::here("revision", "output", "intermediate", "sm6"),
+#'   sm6a_dir = here::here("output", "intermediate", "sm6"),
 #'   ext_dir  = here::here("03_RESULTS")
 #' )
 #' dt <- build_pixel_dt(r, "Blois")
@@ -82,7 +82,7 @@ build_pixel_dt <- function(rasters, site_name) {
 #'   each site uses its own d_opt. If a scalar is supplied, all sites use the
 #'   same value. Default \code{4} (backward-compatible).
 #' @param sm6a_dir     Character. Root of SM6a output directory.
-#'   Typically \code{here::here("revision", "output", "intermediate", "sm6")}.
+#'   Typically \code{here::here("output", "intermediate", "sm6")}.
 #' @param ext_dir      Character. Root of external results directory.
 #'   Typically \code{here::here("03_RESULTS")}.
 #'
@@ -94,24 +94,31 @@ build_pixel_dt <- function(rasters, site_name) {
 #' dt <- build_multisite_dt(
 #'   sites        = c("Aigoual", "Blois", "Mormal"),
 #'   dopt_by_site = c(Aigoual = 4, Blois = 27, Mormal = 13),
-#'   sm6a_dir     = here::here("revision", "output", "intermediate", "sm6"),
+#'   sm6a_dir     = here::here("output", "intermediate", "sm6"),
 #'   ext_dir      = here::here("03_RESULTS")
 #' )
 #' dt[, .N, by = site]
 #' }
 #'
 #' @export
-build_multisite_dt <- function(sites, dopt_by_site = 4, sm6a_dir, ext_dir,
-                               lai_s2_opt_paths = NULL) {
+build_multisite_dt <- function(sites, dopt_by_site, sm6a_dir, ext_dir,
+                               lai_s2_opt_paths   = NULL,
+                               lai_als_dopt_paths = NULL,
+                               dsm_sd_filename    = "dsm_sd_res_10_m.tif",
+                               chm_sd_filename    = "chm_sd_res_10_m.tif") {
   dt_list <- vector("list", length(sites))
   names(dt_list) <- sites
 
   for (site in sites) {
     d_val    <- if (length(dopt_by_site) == 1L) dopt_by_site else dopt_by_site[[site]]
-    opt_path <- if (!is.null(lai_s2_opt_paths)) lai_s2_opt_paths[[site]] else NULL
+    opt_path <- if (!is.null(lai_s2_opt_paths))   lai_s2_opt_paths[[site]]   else NULL
+    als_path <- if (!is.null(lai_als_dopt_paths)) lai_als_dopt_paths[[site]] else NULL
     cli::cli_alert_info("Loading rasters for site: {site} (d_opt = {d_val} m)")
     r               <- load_site_rasters(site, d_val, sm6a_dir, ext_dir,
-                                         lai_s2_opt_path = opt_path)
+                                         lai_s2_opt_path   = opt_path,
+                                         lai_als_dopt_path = als_path,
+                                         dsm_sd_filename   = dsm_sd_filename,
+                                         chm_sd_filename   = chm_sd_filename)
     dt_list[[site]] <- build_pixel_dt(r, site)
     cli::cli_alert_success("  {site}: {nrow(dt_list[[site]])} pixels loaded")
   }

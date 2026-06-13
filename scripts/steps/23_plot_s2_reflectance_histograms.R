@@ -13,10 +13,10 @@
 #           03_RESULTS/{site}/{acq_id}/Reflectance/res_10_m/{acq_id}_Refl
 #
 #         Outputs:
-#           revision/output/figures/reviewers/s2_reflectance_histograms.pdf/.png
+#           output/figures/s2_reflectance_histograms.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/23_plot_s2_reflectance_histograms.R")
+#   source("scripts/23_plot_s2_reflectance_histograms.R")
 # ---
 
 library(here)
@@ -26,7 +26,7 @@ library(patchwork)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ acq_ids <- c(
   Mormal  = "L2A_T31UER_A031222_20210614T105443"
 )
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # Site colours (consistent with rest of the pipeline)

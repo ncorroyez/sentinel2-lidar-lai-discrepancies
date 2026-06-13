@@ -16,15 +16,15 @@
 #                       Output: s2lai_summer_opt_fixed_4_res_10_m.tif
 #
 #         Both rasters per site are written to:
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #
 #         Prerequisites:
-#           - revision/output/intermediate/sm5/prosail_opt.csv  (script 06b)
-#           - revision/output/intermediate/PROSAIL_Models/{site}/
+#           - output/intermediate/sm5/prosail_opt.csv  (script 06b)
+#           - output/intermediate/PROSAIL_Models/{site}/
 #             LIDFa_lai_LMA_BROWN/{Column_opt}.rds              (script 02)
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/06c_sm5_predict_lai_raster.R")
+#   source("scripts/06c_sm5_predict_lai_raster.R")
 # ---
 
 library(here)
@@ -32,8 +32,8 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_inversion.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_inversion.R"))
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ l2a_ids <- c(
 # ── Prerequisites ──────────────────────────────────────────────────────────────
 
 prosail_opt_csv <- here::here(
-  "revision", "output", "intermediate", "sm5", "prosail_opt.csv"
+  "output", "intermediate", "sm5", "prosail_opt.csv"
 )
 if (!file.exists(prosail_opt_csv)) {
   stop("prosail_opt.csv not found — run script 06b first.\n  ", prosail_opt_csv)
@@ -94,8 +94,7 @@ for (scenario in names(scenarios)) {
     cli::cli_alert_info("  d_opt      : {d_opt_val} m")
 
     # ── SVR model ──────────────────────────────────────────────────────────────
-    rds_path <- here::here(
-      "revision", "output", "intermediate", "PROSAIL_Models",
+    rds_path <- file.path(paths$output, "intermediate", "PROSAIL_Models",
       site, name_strategy, paste0(column_opt, ".rds")
     )
     if (!file.exists(rds_path)) {
@@ -155,6 +154,6 @@ elapsed <- round((proc.time() - t0)[["elapsed"]], 1)
 cli::cli_h1("SM5 passe 3 — résumé")
 cli::cli_bullets(c(
   "v" = "Scénarios : {paste(names(scenarios), collapse=', ')}",
-  "v" = "Sorties   : revision/output/intermediate/sm6/{site}/s2lai_summer_opt_{scenario}_res_10_m.tif",
+  "v" = "Sorties   : output/intermediate/sm6/{site}/s2lai_summer_opt_{scenario}_res_10_m.tif",
   "i" = "Durée     : {elapsed} s"
 ))

@@ -38,7 +38,7 @@
 #' \code{01_DATA/} — a violation of the CLAUDE.md read-only rule for that
 #' folder. This refactor replaces the fixed path with an explicit
 #' \code{output_path} argument. The caller (orchestration script) supplies a
-#' path inside \code{03_RESULTS/} or \code{revision/output/}. When
+#' path inside \code{03_RESULTS/} or \code{output/}. When
 #' \code{save = FALSE}, nothing is written and \code{output_path} is ignored.
 #'
 #' **CRS assumption**: \code{terra::project(lidar_r, s2_r)} reprojects the
@@ -175,20 +175,24 @@ align_and_remove_na_for_aoi <- function(aoi_path, S2_path, lidar_lai_path,
 stratified_sampling_uniform <- function(site,
                                          lidar_lai_path,
                                          max_path,
+                                         fcover_path,
                                          nbSamples,
                                          h_min = 10L) {
   # Open raster
-  mraster_r <- terra::rast(lidar_lai_path)
-  mraster   <- sum(mraster_r, na.rm = TRUE)
-  max_rast  <- terra::rast(max_path)
+  mraster_r    <- terra::rast(lidar_lai_path)
+  mraster      <- sum(mraster_r, na.rm = TRUE)
+  max_rast     <- terra::rast(max_path)
+  fcover_rast  <- terra::rast(fcover_path)
 
   # Stack aligned rasters for filtering
-  combined_stack        <- c(mraster, max_rast)
-  names(combined_stack) <- c("lidar_lai", "max_height")
+  combined_stack        <- c(mraster, max_rast, fcover_rast)
+  names(combined_stack) <- c("lidar_lai", "max_height", "fCover")
 
-  # Filter: max_height >= h_min (dmin in the paper) and <= 40 m
+  # Filter: max_height in [h_min, 40] m AND fCover > 0.9
   data_df     <- as.data.frame(combined_stack, xy = TRUE, na.rm = TRUE)
-  filtered_df <- dplyr::filter(data_df, max_height >= h_min & max_height <= 40)
+  filtered_df <- dplyr::filter(data_df,
+                                max_height >= h_min & max_height <= 40 &
+                                fCover > 0.9)
 
   # Define breaks within the 5th-95th percentile range
   lai_5th  <- 2
@@ -396,6 +400,7 @@ stratified_sampling <- function(mean_path, lskew_path, field_points_path,
 #' @export
 get_s2_samples <- function(aoi_path, S2_path, mean_path,
                             lskew_path, lidar_lai_path, max_path,
+                            fcover_path,
                             field_points_path,
                             nbSamples, site, method = 'random',
                             h_min = 10L) {
@@ -432,6 +437,7 @@ get_s2_samples <- function(aoi_path, S2_path, mean_path,
     samples <- stratified_sampling_uniform(site           = site,
                                             lidar_lai_path = lidar_lai_path,
                                             max_path       = max_path,
+                                            fcover_path    = fcover_path,
                                             nbSamples      = nbSamples,
                                             h_min          = h_min)
   } else {

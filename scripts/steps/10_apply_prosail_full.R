@@ -5,7 +5,7 @@
 #         × LAI scenarios (per_site / common / fixed_4).
 #
 # Prerequisite (08): SVR RDS files at
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/{scenario}/*.rds
 #
 # Prerequisite (03a): S2 reflectance CSVs at
@@ -13,20 +13,20 @@
 #   S2_reflectance_stratified_uniform_hmin{h_min}_nbSamples_5000.csv
 #
 # Output: two CSVs per site × scenario × h_min at:
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/{scenario}/
 #     LAI_estimated_{scenario}_stratified_uniform_hmin{h_min}_nbSamples_5000.csv
 #     LAI_estimated_{scenario}_stratified_uniform_hmin{h_min}_nbSamples_5000_SD.csv
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/09_apply_prosail_full.R")
+#   source("scripts/09_apply_prosail_full.R")
 # ---
 
 library("here")
 library("readr")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_inversion.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_inversion.R"))
 
 # ── Parameters ─────────────────────────────────────────────----------------------------------------------------------------
 
@@ -47,8 +47,7 @@ S2BandSelect_2 <- c("B03", "B04", "B08")
 
 # ── Simulation strategy — combination labels ──────────────────────────────────
 
-strategy_path <- here::here(
-  "revision", "output", "intermediate", "PROSAIL_Models",
+strategy_path <- file.path(paths$output, "intermediate", "PROSAIL_Models",
   "Simulations_Strategy", name_strategy, "simulation_strategy.rds"
 )
 simulations <- readRDS(strategy_path)
@@ -72,8 +71,7 @@ for (lai_scenario in lai_scenarios) {
     cat("\n── Site:", site, "──\n")
     t_site <- Sys.time()
 
-    models_dir   <- here::here(
-      "revision", "output", "intermediate", "PROSAIL_Models",
+    models_dir   <- file.path(paths$output, "intermediate", "PROSAIL_Models",
       site, name_strategy, lai_scenario
     )
     filename_SVR <- file.path(models_dir, paste0(combination_labels, ".rds"))
@@ -102,7 +100,7 @@ for (lai_scenario in lai_scenarios) {
                  "_hmin", h_min, "_nbSamples_", nbSamples_sampling, "_SD.csv")
         )
         Sampling_path <- file.path(
-          paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+          paths$sampling, site,
           paste0("S2_reflectance_", Samplingmethod,
                  "_hmin", h_min,
                  "_nbSamples_", nbSamples_sampling, ".csv")

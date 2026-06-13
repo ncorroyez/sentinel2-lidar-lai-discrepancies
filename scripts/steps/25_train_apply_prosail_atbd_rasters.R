@@ -1,8 +1,8 @@
 # ---
 # title:  25_train_apply_prosail_atbd_rasters.R
 # desc:   Produces full-raster LAI maps for the two ATBD validation variants:
-#           ATBD_T : get_atbd_v3_lut_input(codistribution_lai = TRUE)
-#           ATBD_F : get_atbd_v3_lut_input(codistribution_lai = FALSE)
+#           ATBD_T : get_atbd_lut_input(codistribution_lai = TRUE)
+#           ATBD_F : get_atbd_lut_input(codistribution_lai = FALSE)
 #                    (reuses SVR from 02a if present, else retrains)
 #         For each site, applies the per-variant SVR ensemble to the 10-m
 #         Sentinel-2 reflectance raster and writes one GeoTIFF per variant.
@@ -16,12 +16,12 @@
 #             artifacts_deciduous_only_low_vegetation_majority_90_p_res_10_m.envi
 #
 #         Outputs:
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #             s2lai_summer_atbd_T_res_10_m.tif
 #             s2lai_summer_atbd_F_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/25_train_apply_prosail_atbd_rasters.R")
+#   source("scripts/25_train_apply_prosail_atbd_rasters.R")
 # ---
 
 library(here)
@@ -30,10 +30,10 @@ library(prosail)
 library(liquidSVM)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_lut.R"))
-source(here::here("revision", "R", "prosail_inversion.R"))
-source(here::here("revision", "R", "get_s2_angles.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_lut.R"))
+source(here::here("R", "prosail_inversion.R"))
+source(here::here("R", "get_s2_angles.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -95,7 +95,7 @@ train_or_load_atbd_svr <- function(rds_path, geom_s2, codistribution_lai,
   cli::cli_progress_step(
     "{variant_label}: sampling ATBD LUT ({nb_samples} rows, codist={codistribution_lai})"
   )
-  ip <- prosail::get_atbd_v3_lut_input(
+  ip <- prosail::get_atbd_lut_input(
     nb_samples         = nb_samples,
     geom_acq           = geom_acq,
     codistribution_lai = codistribution_lai
@@ -214,6 +214,6 @@ for (i_site in seq_along(sites)) {
 elapsed <- round((proc.time() - t0)[["elapsed"]], 1)
 cli::cli_h1("Done — {elapsed} s total")
 cli::cli_bullets(c(
-  "v" = "Outputs: revision/output/intermediate/sm6/{{site}}/s2lai_summer_atbd_{{T,F}}_res_10_m.tif",
-  ">" = "Next: source('revision/scripts/24_plot_s2_atbd_validation.R')"
+  "v" = "Outputs: output/intermediate/sm6/{{site}}/s2lai_summer_atbd_{{T,F}}_res_10_m.tif",
+  ">" = "Next: source('scripts/24_plot_s2_atbd_validation.R')"
 ))

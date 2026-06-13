@@ -13,12 +13,12 @@
 #         Rasters reloaded from SM6a + external results directories.
 #
 #         Outputs (one pair per site):
-#           revision/output/figures/sm6/density_scatter_Aigoual.pdf / .png
-#           revision/output/figures/sm6/density_scatter_Blois.pdf   / .png
-#           revision/output/figures/sm6/density_scatter_Mormal.pdf  / .png
+#           output/figures/density_scatter_Aigoual.pdf / .png
+#           output/figures/density_scatter_Blois.pdf   / .png
+#           output/figures/density_scatter_Mormal.pdf  / .png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/21_sm6_density_scatter.R")
+#   source("scripts/21_sm6_density_scatter.R")
 # ---
 
 library(here)
@@ -28,10 +28,10 @@ library(ggplot2)
 library(scales)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm6_load_rasters.R"))
-source(here::here("revision", "R", "sm6_dataframe.R"))
-source(here::here("revision", "R", "sm6_classify.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm6_load_rasters.R"))
+source(here::here("R", "sm6_dataframe.R"))
+source(here::here("R", "sm6_classify.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -42,34 +42,38 @@ s2_opt_fn           <- "s2lai_summer_opt_common_res_10_m.tif"
 
 sm6a_dir <- file.path(paths$output, "intermediate", "sm6")
 ext_dir  <- paths$ext_results
-out_dir  <- file.path(paths$output, "figures", "sm6")
+out_dir  <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── d_opt per site ─────────────────────────────────────────────────────────────
 
-prosail_opt_csv <- here::here(
-  "revision", "output", "intermediate", "sm5", "prosail_opt.csv"
+prosail_opt_csv <- file.path(paths$output, "intermediate", "sm5", "prosail_opt.csv"
 )
-if (file.exists(prosail_opt_csv)) {
-  prosail_opt  <- data.table::fread(prosail_opt_csv)
-  opt_ref      <- prosail_opt[Norm == norm_ref & Site %in% sites &
-                               d_opt_source == d_opt_source_select]
-  dopt_by_site <- setNames(opt_ref$d_opt, opt_ref$Site)
-  cli::cli_alert_info(
-    "d_opt: {paste(names(dopt_by_site), dopt_by_site, sep='=', collapse=', ')}"
-  )
-} else {
-  dopt_by_site <- setNames(rep(4L, length(sites)), sites)
-  cli::cli_warn("prosail_opt.csv not found — using fallback d_opt = 4")
-}
+if (!file.exists(prosail_opt_csv))
+  stop("prosail_opt.csv not found — run step 12_sm5_select_prosail_opt.R first:\n  ",
+       prosail_opt_csv, call. = FALSE)
+
+prosail_opt  <- data.table::fread(prosail_opt_csv)
+opt_ref      <- prosail_opt[Norm == norm_ref & Site %in% sites &
+                             d_opt_source == d_opt_source_select]
+if (nrow(opt_ref) != length(sites))
+  stop("prosail_opt.csv missing rows for some sites (norm=", norm_ref,
+       ", source=", d_opt_source_select, "). Got: ",
+       paste(opt_ref$Site, collapse = ", "), call. = FALSE)
+
+dopt_by_site <- setNames(opt_ref$d_opt, opt_ref$Site)[sites]
+cli::cli_alert_info(
+  "d_opt: {paste(names(dopt_by_site), dopt_by_site, sep='=', collapse=', ')}"
+)
 
 # ── DSM thresholds (Low / High boundary) ──────────────────────────────────────
 
-thr_csv <- here::here(
-  "revision", "output", "intermediate", "sm6", "DSM_sd_thresholds.csv"
+thr_csv <- file.path(paths$output, "intermediate", "sm6",
+  paste0("DSM_sd_thresholds_", d_opt_source_select, ".csv")
 )
 if (!file.exists(thr_csv))
-  stop("Missing: ", thr_csv, "\nRun script 15 first.")
+  stop("Missing: ", thr_csv,
+       "\nRun script 15 first (it now writes mode-tagged thresholds).")
 thr_dt   <- data.table::fread(thr_csv)
 low_thr  <- thr_dt$low_threshold[1L]
 high_thr <- thr_dt$high_threshold[1L]
@@ -82,12 +86,18 @@ cli::cli_h2("Loading rasters (may take ~30 s)")
 lai_s2_opt_paths <- setNames(
   file.path(sm6a_dir, sites, s2_opt_fn), sites
 )
+lai_als_dopt_paths <- setNames(
+  file.path(paths$output, "intermediate", "lai_als_dopt", sites,
+             "LAI_ALS_dopt_per_site.tif"),
+  sites
+)
 dt_full <- build_multisite_dt(
-  sites            = sites,
-  dopt_by_site     = dopt_by_site,
-  sm6a_dir         = sm6a_dir,
-  ext_dir          = ext_dir,
-  lai_s2_opt_paths = lai_s2_opt_paths
+  sites              = sites,
+  dopt_by_site       = dopt_by_site,
+  sm6a_dir           = sm6a_dir,
+  ext_dir            = ext_dir,
+  lai_s2_opt_paths   = lai_s2_opt_paths,
+  lai_als_dopt_paths = lai_als_dopt_paths
 )
 cli::cli_alert_success("Total pixels loaded: {nrow(dt_full)}")
 

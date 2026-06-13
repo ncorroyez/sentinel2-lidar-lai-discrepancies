@@ -5,19 +5,19 @@
 #         (Aigoual, Blois, Mormal).
 #
 #         Mirrors PROSAIL-Optimization/02_CODES/Sentinel2/Main_s2_00_download.R
-#         refactored with here::here() paths and revision/R/sentinel2_preprocessing.R.
+#         refactored with here::here() paths and R/sentinel2_preprocessing.R.
 #
 # Prerequisite: SAFE archives must be present at
 #   01_DATA/{site}/Sentinel-2/{date}/{safe_name}.SAFE
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/01a_download_s2_from_safe.R")
+#   source("scripts/01a_download_s2_from_safe.R")
 # ---
 
 library("here")
 library("preprocS2")
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sentinel2_preprocessing.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sentinel2_preprocessing.R"))
 
 # ── Site parameters — unchanged from Main_s2_00_download.R ────────────────────
 

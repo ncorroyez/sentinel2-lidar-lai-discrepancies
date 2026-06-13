@@ -4,30 +4,30 @@
 #         for the ATBD-only inversion across all depths, sites, norms and h_min
 #         values. Output feeds directly into 06 (d_opt selection).
 #
-#         Reuses build_metrics_table() from revision/R/sm5_aggregate.R, called
+#         Reuses build_metrics_table() from R/sm5_aggregate.R, called
 #         with the ATBD-specific CSV filenames produced by 04a.
 #
 # Prerequisites:
 #   03b — PAD CSVs at 03_RESULTS/{site}/PROSAIL_Optimization/sampling/
 #   04a — LAI_estimated_atbd_*.csv at
-#         revision/output/intermediate/PROSAIL_Models/{site}/
+#         output/intermediate/PROSAIL_Models/{site}/
 #         LIDFa_lai_LMA_BROWN/atbd/
 #
 # Output:
-#   revision/output/intermediate/sm5/
+#   output/intermediate/sm5/
 #   all_results_atbd_LIDFa_lai_LMA_BROWN.csv
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/05a_sm5_compute_metrics_atbd.R")
+#   source("scripts/05a_sm5_compute_metrics_atbd.R")
 # ---
 
 library("here")
 library("data.table")
 library("cli")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm5_metrics.R"))
-source(here::here("revision", "R", "sm5_aggregate.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm5_metrics.R"))
+source(here::here("R", "sm5_aggregate.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -73,14 +73,13 @@ build_metrics_table_atbd <- function(sites, norm_methods, depths,
           for (h_min in h_min_values) {
 
             lidar_csv <- file.path(
-              paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+              paths$sampling, site,
               paste0("PAD_", norm, "_Depth_", depth,
                      "_Samples_", sampling_method,
                      "_hmin", h_min,
                      "_nbSamples_", nb_samples, ".csv")
             )
-            s2_csv <- here::here(
-              "revision", "output", "intermediate", "PROSAIL_Models",
+            s2_csv <- file.path(paths$output, "intermediate", "PROSAIL_Models",
               site, name_strategy, "atbd",
               paste0("LAI_estimated_atbd_", sampling_method,
                      "_hmin", h_min,
@@ -135,14 +134,13 @@ build_metrics_table_atbd <- function(sites, norm_methods, depths,
 
           for (site in sites) {
             lidar_csv <- file.path(
-              paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+              paths$sampling, site,
               paste0("PAD_", norm, "_Depth_", depth,
                      "_Samples_", sampling_method,
                      "_hmin", h_min,
                      "_nbSamples_", nb_samples, ".csv")
             )
-            s2_csv <- here::here(
-              "revision", "output", "intermediate", "PROSAIL_Models",
+            s2_csv <- file.path(paths$output, "intermediate", "PROSAIL_Models",
               site, name_strategy, "atbd",
               paste0("LAI_estimated_atbd_", sampling_method,
                      "_hmin", h_min,
@@ -154,6 +152,11 @@ build_metrics_table_atbd <- function(sites, norm_methods, depths,
             s2_dt    <- data.table::fread(s2_csv,    header = TRUE, sep = "\t")
 
             s2_dt[, samples_id := .I]
+            # Workaround: upstream PAD CSVs occasionally contain a duplicated
+            # samples_id (e.g. Blois depth=10) which breaks the symmetric
+            # filter below. Dedup by samples_id (keep first) prior to the
+            # filter to keep lidar/s2 row counts aligned.
+            lidar_dt <- unique(lidar_dt, by = "samples_id")
             lidar_dt <- lidar_dt[samples_id %in% s2_dt[["samples_id"]]]
             s2_dt    <- s2_dt[samples_id %in% lidar_dt[["samples_id"]]]
             data.table::setkey(lidar_dt, samples_id)

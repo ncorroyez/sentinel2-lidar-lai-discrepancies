@@ -16,25 +16,25 @@
 # Prerequisites:
 #   02a — simulation strategy RDS (written once, shared with 02a)
 #   07  — LAI_ALS_dopt rasters at
-#         revision/output/intermediate/lai_als_dopt/{site}/LAI_ALS_dopt_{scenario}.tif
+#         output/intermediate/lai_als_dopt/{site}/LAI_ALS_dopt_{scenario}.tif
 #   S2 geometry rasters at 03_RESULTS/{site}/PROSAIL_Optimization/geomAcq_S2/
 #
 # Output: 270 RDS per site × scenario at:
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/{scenario}/
 #   (scenario ∈ {per_site, common})
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/08_train_prosail_full.R")
+#   source("scripts/08_train_prosail_full.R")
 # ---
 
 library("here")
 library("terra")
 library("progressr")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_lut.R"))
-source(here::here("revision", "R", "get_s2_angles.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_lut.R"))
+source(here::here("R", "get_s2_angles.R"))
 
 # global = TRUE propagates the handler into nested with_progress() calls
 # (e.g. the one inside train_all_simulations in prosail_lut.R)
@@ -49,7 +49,7 @@ parms2test             <- c("LIDFa", "lai", "LMA", "BROWN")
 name_strategy          <- "LIDFa_lai_LMA_BROWN"
 nbSamples_train        <- 2000
 S2BandSelect           <- c("B3", "B4", "B8")
-nbCPU                  <- 1L
+nbCPU                  <- 4L   # parallel workers (1L = sequential, very slow)
 nbValuesPerSiteForPool <- 5000
 
 lai_scenarios <- c("common")
@@ -59,7 +59,7 @@ lai_scenarios <- c("common")
 # applied to the full-canopy ladstack sum pool (computed at k_ref=0.5, theta=0°).
 # lai_dopt_values_vec from 07 rasters is already scaled — no second scaling needed.
 k_ref        <- 0.5
-k_select     <- 0.6
+k_select     <- 0.65
 theta_select <- 0    # degrees from nadir (scan angle correction handled separately)
 scale_factor <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
@@ -179,12 +179,12 @@ for (lai_scenario in lai_scenarios) {
   for (i_site in seq_along(sites)) {
 
     site    <- sites[[i_site]]
-    t_start <- Sys.time()
+    t0_site <- Sys.time()
     cat(sprintf("\n[%d/%d] Training site: %s | scenario: %s (%d models)\n",
                 i_site, n_sites, site, lai_scenario, nrow(simulations$grid_simu)))
 
     models_dir   <- here::here(
-      "revision", "output", "intermediate", "PROSAIL_Models",
+      "output", "intermediate", "PROSAIL_Models",
       site, name_strategy, lai_scenario
     )
     filename_svr <- file.path(models_dir, paste0(combination_labels, ".rds"))
@@ -203,7 +203,7 @@ for (lai_scenario in lai_scenarios) {
       S2BandSelect        = S2BandSelect
     )
 
-    elapsed_site <- round(difftime(Sys.time(), t_start, units = "mins"), 1)
+    elapsed_site <- round(difftime(Sys.time(), t0_site, units = "mins"), 1)
     elapsed_tot  <- round(difftime(Sys.time(), t_phase_b, units = "mins"), 1)
     cat(sprintf("  Done in %.1f min  (cumul: %.1f min)\n", elapsed_site, elapsed_tot))
   }

@@ -7,14 +7,14 @@
 #         in 03_RESULTS/{site}/PROSAIL_Optimization/sampling/.
 #
 #         Mirrors PROSAIL-Optimization/02_CODES/Sentinel2/Main_s2_02A_extract.R
-#         refactored with here::here() paths and revision/R/sentinel2_sampling.R.
+#         refactored with here::here() paths and R/sentinel2_sampling.R.
 #
 # NOTE:   The AOI sampling preparation file (aoi_sampling_prep.gpkg) is written
 #         to 03_RESULTS/{site}/PROSAIL_Optimization/sampling/ instead of
 #         01_DATA/{site}/Geo_Files/ (original behaviour, violation of CLAUDE.md).
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/03a_sample_s2_pixels.R")
+#   source("scripts/03a_sample_s2_pixels.R")
 # ---
 
 library("here")
@@ -23,8 +23,8 @@ library("sgsR")
 library("dplyr")
 library("readr")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sentinel2_sampling.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sentinel2_sampling.R"))
 
 # ── Global parameters — unchanged from Main_s2_02A_extract.R ─────────────────
 
@@ -56,12 +56,13 @@ for (site in sites) {
   mean_path         <- file.path(paths$raw_data, site, "LiDAR", "mean_res_10_m.tif")
   max_path          <- file.path(lidar_dir, "max_res_10_m.tif")
   lskew_path        <- file.path(paths$raw_data, site, "LiDAR", "lskew_res_10_m.tif")
+  fcover_path       <- file.path(paths$ext_results, site, "Metrics",
+                                  "Deciduous_Only", "fCover_res_10_m.tif")
   field_points_path <- file.path(paths$raw_data, site, "Geo_Files",
                                   "data_utm31n.geojson")
 
   # Output sampling directory
-  out_sampling <- file.path(paths$ext_results, site, "PROSAIL_Optimization",
-                             "sampling")
+  out_sampling <- file.path(paths$sampling, site)
   dir.create(out_sampling, showWarnings = FALSE, recursive = TRUE)
 
   # Step 1 — clip AOI to valid S2 + LiDAR pixels
@@ -88,6 +89,7 @@ for (site in sites) {
         lskew_path        = lskew_path,
         lidar_lai_path    = lidar_lai_path,
         max_path          = max_path,
+        fcover_path       = fcover_path,
         field_points_path = field_points_path,
         nbSamples         = nbSamples,
         site              = site,

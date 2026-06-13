@@ -97,7 +97,7 @@ pad_filename <- function(dopt_value, canopy_max_m = 40) {
 #'   Default \code{4} kept for backward compatibility.
 #' @param sm6a_dir   Character. Root directory of SM6a outputs (the directory
 #'   that contains \code{{site}/dsm_sd_res_10_m.tif} and its CHM counterpart).
-#'   Typically \code{here::here("revision", "output", "intermediate", "sm6")}.
+#'   Typically \code{here::here("output", "intermediate", "sm6")}.
 #'   Also used to locate \code{s2lai_summer_opt_res_10_m.tif} (SM5 passe 3
 #'   output, script 06c) when \code{lai_s2_opt_path} is \code{NULL}.
 #' @param ext_dir    Character. Root of the external results directory.
@@ -127,15 +127,18 @@ pad_filename <- function(dopt_value, canopy_max_m = 40) {
 #' r <- load_site_rasters(
 #'   site       = "Blois",
 #'   dopt_value = 4,
-#'   sm6a_dir   = here::here("revision", "output", "intermediate", "sm6"),
+#'   sm6a_dir   = here::here("output", "intermediate", "sm6"),
 #'   ext_dir    = here::here("03_RESULTS")
 #' )
 #' terra::nlyr(r$lai_als)  # > 1
 #' }
 #'
 #' @export
-load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir,
-                              lai_s2_opt_path = NULL) {
+load_site_rasters <- function(site, dopt_value, sm6a_dir, ext_dir,
+                              lai_s2_opt_path     = NULL,
+                              lai_als_dopt_path   = NULL,
+                              dsm_sd_filename     = "dsm_sd_res_10_m.tif",
+                              chm_sd_filename     = "chm_sd_res_10_m.tif") {
   dec_only <- file.path(ext_dir, site, "Metrics", "Deciduous_Only")
 
   # ── ladstack: multi-layer → sum to get LAI_ALS ──────────────────────────────
@@ -150,17 +153,29 @@ load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir,
   }
   lai_als <- sum(ladstack, na.rm = TRUE)
 
-  # ── PAD at d_opt (single-layer) ──────────────────────────────────────────────
-  pad_fn   <- pad_filename(dopt_value)
-  pad_path <- file.path(dec_only, "PAD_Profiles_dsm_keepTrees", pad_fn)
-  lai_als_dopt <- terra::rast(pad_path)
+  # ── LAI_ALS_dopt: prefer script-07 raster (k_select rescaled),
+  #    fall back to the raw per-pixel canopy-top PAD raster (at k_ref).
+  #    NOTE: do NOT compute from `ladstack_classic.tif` — its layers are
+  #    absolute-height bins (LAD_Layer_2.5 ... 39.5), not depth-from-top.
+  if (!is.null(lai_als_dopt_path) && file.exists(lai_als_dopt_path)) {
+    lai_als_dopt <- terra::rast(lai_als_dopt_path)
+  } else {
+    pad_fn   <- pad_filename(dopt_value)
+    pad_path <- file.path(dec_only, "PAD_Profiles_dsm_keepTrees", pad_fn)
+    if (!file.exists(pad_path))
+      stop("load_site_rasters: LAI_ALS_dopt not found for site '", site,
+           "' (d_opt = ", dopt_value, ").\n  Tried:\n    ",
+           lai_als_dopt_path, "\n    ", pad_path,
+           "\n  Run scripts/steps/07_compute_lai_als_dopt.R first.")
+    lai_als_dopt <- terra::rast(pad_path)
+  }
 
   # ── S2 rasters (single-layer each) ───────────────────────────────────────────
   # prosail 3.0.0 ATBD_T raster produced by script 25 — no legacy fallback.
   atbd_path <- file.path(sm6a_dir, site, "s2lai_summer_atbd_T_res_10_m.tif")
   if (!file.exists(atbd_path))
     stop("load_site_rasters: ATBD_T raster missing for '", site, "':\n  ",
-         atbd_path, "\nRun revision/scripts/25_train_apply_prosail_atbd_rasters.R first.")
+         atbd_path, "\nRun scripts/25_train_apply_prosail_atbd_rasters.R first.")
   lai_s2_atbd <- terra::rast(atbd_path)
   # lai_s2_opt: SM5 passe 3 output preferred; fallback to legacy if absent.
   if (is.null(lai_s2_opt_path)) {
@@ -179,8 +194,8 @@ load_site_rasters <- function(site, dopt_value = 4, sm6a_dir, ext_dir,
 
   # ── SM6a heterogeneity rasters ───────────────────────────────────────────────
   sm6a_site <- file.path(sm6a_dir, site)
-  dsm_sd    <- terra::rast(file.path(sm6a_site, "dsm_sd_res_10_m.tif"))
-  chm_sd    <- terra::rast(file.path(sm6a_site, "chm_sd_res_10_m.tif"))
+  dsm_sd    <- terra::rast(file.path(sm6a_site, dsm_sd_filename))
+  chm_sd    <- terra::rast(file.path(sm6a_site, chm_sd_filename))
 
   # ── Max height (single-layer) ─────────────────────────────────────────────────
   max_height <- terra::rast(file.path(dec_only, "max_res_10_m.tif"))

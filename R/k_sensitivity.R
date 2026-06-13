@@ -124,7 +124,7 @@ rescale_lai_for_theta <- function(lai_at_nadir, theta_deg) {
 #'   containing integrated LAI rescaled to \code{k_new}.
 #'
 #' @references
-#' Convention for ladstack loading: \code{revision/R/sm6_load_rasters.R},
+#' Convention for ladstack loading: \code{R/sm6_load_rasters.R},
 #' \code{load_site_rasters()} — multi-layer sum giving LAI_ALS at k_ref.
 #'
 #' Bouvier et al. (2015) — see \code{rescale_lai_for_k()}.

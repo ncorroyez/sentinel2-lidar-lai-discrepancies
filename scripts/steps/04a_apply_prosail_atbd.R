@@ -5,7 +5,7 @@
 #         Produces LAI_S2_atbd estimates used by 05a to determine d_opt.
 #
 # Prerequisite (02a): ATBD SVR RDS must be present at
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/atbd/LIDFa=1_lai=1_LMA=1_BROWN=1.rds
 #
 # Prerequisite (03a): S2 reflectance CSVs must be present at
@@ -13,20 +13,20 @@
 #   S2_reflectance_stratified_uniform_hmin{h_min}_nbSamples_5000.csv
 #
 # Output: one CSV per site × h_min at:
-#   revision/output/intermediate/PROSAIL_Models/{site}/
+#   output/intermediate/PROSAIL_Models/{site}/
 #   LIDFa_lai_LMA_BROWN/atbd/
 #   LAI_estimated_atbd_stratified_uniform_hmin{h_min}_nbSamples_5000.csv
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/04a_apply_prosail_atbd.R")
+#   source("scripts/04a_apply_prosail_atbd.R")
 # ---
 
 library("here")
 library("readr")
 library("cli")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "prosail_inversion.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "prosail_inversion.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -47,8 +47,7 @@ for (site in sites) {
 
   cat("\n── ATBD inversion for site:", site, "──\n")
 
-  models_dir   <- here::here(
-    "revision", "output", "intermediate", "PROSAIL_Models",
+  models_dir   <- file.path(paths$output, "intermediate", "PROSAIL_Models",
     site, name_strategy, "atbd"
   )
   filename_svr <- file.path(models_dir, paste0(atbd_label, ".rds"))
@@ -63,7 +62,7 @@ for (site in sites) {
   for (h_min in h_min_values) {
 
     Sampling_path <- file.path(
-      paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+      paths$sampling, site,
       paste0("S2_reflectance_", Samplingmethod,
              "_hmin", h_min,
              "_nbSamples_", nbSamples_sampling, ".csv")

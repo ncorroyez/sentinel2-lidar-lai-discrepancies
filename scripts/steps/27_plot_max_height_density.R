@@ -8,10 +8,10 @@
 #           {ext_results}/{site}/Metrics/Deciduous_Only/max_res_10_m.tif
 #
 #         Outputs:
-#           revision/output/figures/reviewers/max_height_density.pdf/.png
+#           output/figures/max_height_density.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/27_plot_max_height_density.R")
+#   source("scripts/27_plot_max_height_density.R")
 # ---
 
 library(here)
@@ -20,14 +20,14 @@ library(ggplot2)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites     <- c("Aigoual", "Blois", "Mormal")
 q_prob    <- 0.999   # 99.9th percentile
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── Load rasters and extract values ────────────────────────────────────────────

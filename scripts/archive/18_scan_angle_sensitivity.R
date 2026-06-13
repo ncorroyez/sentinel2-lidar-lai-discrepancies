@@ -19,19 +19,19 @@
 #         catalog.
 #
 # Output:
-#   revision/output/intermediate/scan_angle/Aigoual/
+#   output/intermediate/scan_angle/Aigoual/
 #     cos_theta_mean_dryrun.tif   (dry run, one tile)
 #     cos_theta_mean.tif          (full run, all tiles)
 #     scan_angle_summary.csv      (distribution stats)
 #
-# Run from NC_Full/:  source("revision/scripts/18_scan_angle_sensitivity.R")
+# Run from NC_Full/:  source("scripts/18_scan_angle_sensitivity.R")
 # ---
 
 library("here")
 library("terra")
 library("lidR")
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 DRY_RUN <- TRUE   # set FALSE after validating dry-run timing
 

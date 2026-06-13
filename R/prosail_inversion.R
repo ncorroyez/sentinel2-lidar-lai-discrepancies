@@ -17,7 +17,7 @@
 #' @title Load and deserialise a serialised SVR ensemble
 #'
 #' @description
-#' Reads an RDS file produced by \code{revision/R/prosail_lut.R}
+#' Reads an RDS file produced by \code{R/prosail_lut.R}
 #' \code{train_all_simulations()} and deserialises each liquidSVM model it
 #' contains, returning a list ready for \code{prosail::prosail_hybrid_apply}.
 #'
@@ -44,7 +44,7 @@
 #' @examples
 #' \dontrun{
 #'   svr <- load_svr_ensemble(
-#'     here::here("revision", "output", "intermediate",
+#'     here::here("output", "intermediate",
 #'                "PROSAIL_Models", "Blois",
 #'                "LIDFa_lai_LMA_BROWN",
 #'                "LIDFa=40_lai=2_LMA=0.01_BROWN=0.rds")

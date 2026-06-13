@@ -10,7 +10,7 @@
 #         Total at execution: 3 sites × 4 norm types × 38 depths = 456 CSVs.
 #
 #         Mirrors PROSAIL-Optimization/02_CODES/Sentinel2/Main_s2_02B_sample_lidar.R
-#         refactored with here::here() paths and revision/R/sentinel2_sampling.R.
+#         refactored with here::here() paths and R/sentinel2_sampling.R.
 #
 # Prerequisite: 03a_sample_s2_pixels.R must have been run first (produces
 #   the Sampling_stratified_uniform_nbSamples_5000.GPKG files).
@@ -20,15 +20,15 @@
 #         to remain compatible with the d_opt analysis pipeline (SM5).
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/03b_extract_lidar_at_samples.R")
+#   source("scripts/03b_extract_lidar_at_samples.R")
 # ---
 
 library("here")
 library("terra")
 library("readr")
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sentinel2_sampling.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sentinel2_sampling.R"))
 
 # ── Global parameters — unchanged from Main_s2_02B_sample_lidar.R ─────────────
 
@@ -56,14 +56,13 @@ for (site in sites) {
 
   # Sample locations GPKG produced by 03a
   filename_sampling <- file.path(
-    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+    paths$sampling, site,
     paste0("Sampling_", Samplingmethod,
            "_hmin", h_min,
            "_nbSamples_", nbSamplesS2Refl, ".GPKG")
   )
 
-  out_sampling <- file.path(paths$ext_results, site, "PROSAIL_Optimization",
-                             "sampling")
+  out_sampling <- file.path(paths$sampling, site)
 
   for (norm_name in names(norm_types)) {
 
@@ -102,4 +101,4 @@ for (site in sites) {
   }  # end h_min loop
 }
 
-cat("Done. CSVs written to 03_RESULTS/{site}/PROSAIL_Optimization/sampling/\n")
+cat("Done. CSVs written to", paths$sampling, "\n")

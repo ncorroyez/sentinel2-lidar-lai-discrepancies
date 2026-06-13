@@ -10,13 +10,13 @@
 #           20b  fcover_hmin_combined    — 1D fCover + h_min combined panel
 #           20c  fcover_hmin_joint_plot  — 2D joint sensitivity heatmap
 #
-#         Outputs (revision/output/figures/reviewers/):
+#         Outputs (output/figures/):
 #           fig_dopt_k_sensitivity_*.pdf, fig_lai_k_sensitivity_*.pdf,
 #           fig_fcover_sensitivity_*.pdf, fig_fcover_hmin_combined_*.pdf,
 #           fig_fcover_hmin_joint_*.pdf
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/05_sensitivity_figures.R")
+#   source("scripts/05_sensitivity_figures.R")
 # ---
 
 library(here)
@@ -35,11 +35,11 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/05d_sm5_plot_k_zmin_sensitivity_dopt.R")
-step("revision/scripts/steps/17b_k_sensitivity_plot.R")
-step("revision/scripts/steps/18c_fcover_sensitivity_plot.R")
-step("revision/scripts/steps/20b_fcover_hmin_combined_plot.R")
-step("revision/scripts/steps/20c_fcover_hmin_joint_plot.R")
+step("scripts/steps/05d_sm5_plot_k_zmin_sensitivity_dopt.R")
+step("scripts/steps/17b_k_sensitivity_plot.R")
+step("scripts/steps/18c_fcover_sensitivity_plot.R")
+step("scripts/steps/20b_fcover_hmin_combined_plot.R")
+step("scripts/steps/20c_fcover_hmin_joint_plot.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("05_sensitivity_figures done — {elapsed_total} min")

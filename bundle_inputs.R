@@ -1,31 +1,32 @@
 # ---
 # title:  bundle_inputs.R
 # desc:   Copies all input data required to run the full pipeline (phase 1→5)
-#         from the SMB share (or any configured data_root) to revision/data/,
+#         from the SMB share (or any configured data_root) to data/,
 #         so the pipeline can be run locally with profile: local in config.yml.
 #
 #         Run once from the project root (NC_Full/) while the SMB is mounted:
-#           source("revision/bundle_inputs.R")
+#           source("bundle_inputs.R")
 #
-#         The resulting revision/data/ tree (~300–500 Mo) can be zipped and
+#         The resulting data/ tree (~300–500 Mo) can be zipped and
 #         shared with anyone who has access to the code on GitHub.
 #
 # Recipient instructions:
 #   1. Clone the code: git clone <github_url>
-#   2. Extract the data bundle into revision/data/
+#   2. Extract the data bundle into data/
 #   3. Copy config.yml.template to config.yml
 #   4. Set profile: local in config.yml and adjust data_root / output_root
-#   5. source("revision/scripts/00_run_all.R")
+#   5. source("scripts/00_run_all.R")
 # ---
 
 library(here)
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Destination roots ─────────────────────────────────────────────────────────
 
-dst_raw     <- here::here("revision", "data", "raw")
-dst_results <- here::here("revision", "data", "results")
-dst_lidar   <- here::here("revision", "data", "prosail_lidar")
+dst_raw     <- here::here("data", "raw")
+dst_results <- here::here("data", "results")
+dst_lidar   <- here::here("data", "prosail_lidar")
+dst_snap    <- here::here("data", "snap_lai")
 
 sites <- c("Aigoual", "Blois", "Mormal")
 
@@ -111,6 +112,12 @@ for (site in sites) {
                 "ladstack_classic.tif", "fCover_res_10_m.tif")) {
     cp_file(file.path(dec_only_src, tif), dec_only_dst)
   }
+
+  # Metrics/Raw — ladstack needed by 18_fcover_sensitivity.R
+  cp_file(
+    file.path(paths$ext_results, site, "Metrics", "Raw", "ladstack.tif"),
+    file.path(dst_results, site, "Metrics", "Raw")
+  )
   # PAD profiles (DSM variant) — used by sm6_load_rasters for PAD figures
   cp_dir(
     file.path(dec_only_src, "PAD_Profiles_dsm_keepTrees"),
@@ -151,19 +158,40 @@ for (site in sites) {
     file.path(dst_lidar, site, "LiDAR", "PAD_Profiles_dsm_keepTrees")
   )
 
+  # Per-depth PAD rasters for 4 norm variants — required by 03b to produce
+  # PAD CSVs at S2 sample positions (d_opt analysis, SM5)
+  for (pad_norm in c("PAD_Profiles_DSM", "PAD_Profiles_DTM",
+                     "PAD_Profiles_DSM_keepTrees", "PAD_Profiles_DTM_keepTrees")) {
+    cp_dir(
+      file.path(lidar_src, "testPADs", pad_norm),
+      file.path(dst_lidar, site, "LiDAR", "testPADs", pad_norm)
+    )
+  }
+
   # Max canopy height raster — coherence mask
   cp_file(
     file.path(lidar_src, "max_res_10_m.tif"),
     file.path(dst_lidar, site, "LiDAR")
   )
 
+  # ── snap_lai — SNAP biophysical processor reference LAI (script 24) ─────────
+  snap_src <- file.path(Sys.getenv("HOME"), "Documents", "Softwares",
+                         "SNAP_Toolbox_Results", site)
+  if (dir.exists(snap_src)) {
+    cp_dir(snap_src, file.path(dst_snap, site))
+  } else {
+    warning("SNAP source not found, skipping snap_lai for ", site, ":\n  ",
+            snap_src)
+  }
+
   message("  Done: ", site)
 }
 
 # ── Size summary ──────────────────────────────────────────────────────────────
 
-dirs <- c(dst_raw, dst_results, dst_lidar)
+dirs <- c(dst_raw, dst_results, dst_lidar, dst_snap)
 sizes <- vapply(dirs, function(d) {
+  if (!dir.exists(d)) return(0)
   fs <- list.files(d, recursive = TRUE, full.names = TRUE)
   sum(file.size(fs), na.rm = TRUE) / 1024^2  # MB
 }, numeric(1))
@@ -172,5 +200,6 @@ message("\n── Bundle complete ──")
 message(sprintf("  raw/           : %6.0f MB", sizes[[1]]))
 message(sprintf("  results/       : %6.0f MB", sizes[[2]]))
 message(sprintf("  prosail_lidar/ : %6.0f MB", sizes[[3]]))
+message(sprintf("  snap_lai/      : %6.0f MB", sizes[[4]]))
 message(sprintf("  TOTAL          : %6.0f MB", sum(sizes)))
-message("\nShare revision/data/ as a zip — recipient extracts, sets profile: local in config.yml.")
+message("\nShare data/ as a zip — recipient extracts, sets profile: local in config.yml.")

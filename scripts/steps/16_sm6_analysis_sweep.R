@@ -15,7 +15,7 @@
 #         site) within each variant, not physical comparability between them.
 #
 #         Outputs:
-#           revision/output/intermediate/sm6/thresholds_sweep.csv
+#           output/intermediate/sm6/thresholds_sweep.csv
 #             12 rows (2 metrics × 6 variants), columns:
 #             metric_source, window_method, window_size_m,
 #             low_threshold, high_threshold, balance_score,
@@ -24,7 +24,7 @@
 #             count_blois_{low,medium,high},
 #             count_mormal_{low,medium,high}
 #
-#           revision/output/intermediate/sm6/heterogeneity_analysis_sweep.csv
+#           output/intermediate/sm6/heterogeneity_analysis_sweep.csv
 #             ≤378 rows (3 sites × 2 metrics × 6 variants × 3 combos × 3 classes);
 #             fewer if calibration fails for some variants.
 #             Columns: site, metric_source, window_method, window_size_m,
@@ -36,7 +36,7 @@
 #
 #         Prerequisites:
 #           SM6a passe 2 outputs (07_sm6_compute_heterogeneity.R):
-#             revision/output/intermediate/sm6/{site}/
+#             output/intermediate/sm6/{site}/
 #               {dsm,chm}_sd_{block,focal}_{5,10,20,50,30,50}_m.tif
 #           External rasters (same as SM6b passe 1 — 08_sm6_analysis.R):
 #             ladstack_classic.tif, PAD_36.5_40.tif, max_res_10_m.tif,
@@ -44,7 +44,7 @@
 #             s2lai_summer_best_indiv_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/09_sm6_analysis_sweep.R")
+#   source("scripts/09_sm6_analysis_sweep.R")
 # ---
 
 library(here)
@@ -52,18 +52,33 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "sm6_load_rasters_sweep.R"))
-source(here::here("revision", "R", "sm6_thresholds.R"))
-source(here::here("revision", "R", "sm6_classify.R"))
-source(here::here("revision", "R", "sm6_metrics.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "sm6_load_rasters_sweep.R"))
+source(here::here("R", "sm6_thresholds.R"))
+source(here::here("R", "sm6_classify.R"))
+source(here::here("R", "sm6_metrics.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites          <- c("Aigoual", "Blois", "Mormal")
-dopt_value     <- 7          # d_opt in metres (all_sites common); see pad_filename_sweep()
 canopy_max_m   <- 40         # fixed canopy height ceiling used in PAD naming
 metric_sources <- c("DSM", "CHM")
+
+# d_opt for the sweep: load the common (all-sites) value from prosail_opt.csv.
+# The sweep uses a single d_opt across sites (common mode).
+norm_ref            <- "DSM_keepTrees"
+prosail_opt_csv_sw  <- file.path(paths$output, "intermediate", "sm5", "prosail_opt.csv")
+if (!file.exists(prosail_opt_csv_sw))
+  stop("prosail_opt.csv not found — run step 12_sm5_select_prosail_opt.R first:\n  ",
+       prosail_opt_csv_sw, call. = FALSE)
+prosail_opt_sw <- data.table::fread(prosail_opt_csv_sw)
+opt_common <- prosail_opt_sw[Norm == norm_ref & d_opt_source == "all_sites"]
+if (nrow(opt_common) == 0L)
+  stop("prosail_opt.csv has no all_sites row for Norm=", norm_ref,
+       ". Re-run step 12 with d_opt_source 'all_sites' enabled.",
+       call. = FALSE)
+dopt_value <- opt_common$d_opt[[1L]]
+cli::cli_alert_info("Sweep d_opt (common, norm = {norm_ref}) = {dopt_value} m")
 
 sweep_variants <- list(
   list(method = "block", size_m = 5L),
@@ -74,10 +89,16 @@ sweep_variants <- list(
   list(method = "focal", size_m = 50L)
 )
 
-# downsample_n: max pixels per (site × combination × class) group.
-# NULL  → use all pixels (default, recommended).
-# 5000  → replicates legacy slice_sample(n = 5000) for direct comparability.
-downsample_n <- NULL
+# Site-level uniform-LAI sampling done BEFORE threshold calibration.
+n_target_per_site <- 50000L
+lai_min           <- 2.0
+lai_max_quantile  <- 0.98
+bin_width         <- 1.0
+
+# Heterogeneity thresholds. NULL → dynamic calibration per variant.
+# Otherwise: c(low, high) applied to every (metric_source × variant).
+fixed_thresholds_sweep <- c(low = 2.5, high = 5.0)
+# fixed_thresholds_sweep <- NULL    # uncomment to re-enable per-variant calib.
 
 sm6a_dir <- file.path(paths$output, "intermediate", "sm6")
 ext_dir  <- paths$ext_results
@@ -87,6 +108,8 @@ out_dir  <- file.path(paths$output, "intermediate", "sm6")
 
 pad_fn   <- pad_filename_sweep(dopt_value, canopy_max_m)
 metrics  <- c("DSM", "CHM")
+
+als_dopt_07_dir <- file.path(paths$output, "intermediate", "lai_als_dopt")
 
 required_files <- list()
 
@@ -99,9 +122,15 @@ for (site in sites) {
     path     = file.path(base_ext, "ladstack_classic.tif"),
     producer = "produced by 2.calculate_25m_metrics.R"
   )
-  required_files[[paste0(site, "_pad")]] <- list(
-    path     = file.path(base_ext, "PAD_Profiles_dsm_keepTrees", pad_fn),
-    producer = "produced by 2.calculate_25m_metrics.R (PAD pipeline)"
+  # LAI_ALS_dopt: prefer script-07 raster, fall back to raw PAD file.
+  als_dopt_07  <- file.path(als_dopt_07_dir, site, "LAI_ALS_dopt_per_site.tif")
+  pad_path_raw <- file.path(base_ext, "PAD_Profiles_dsm_keepTrees", pad_fn)
+  required_files[[paste0(site, "_lai_als_dopt")]] <- list(
+    path     = if (file.exists(als_dopt_07)) als_dopt_07 else pad_path_raw,
+    producer = if (file.exists(als_dopt_07))
+      paste0("produced by step 07 (LAI_ALS_dopt_per_site.tif, d_opt=", dopt_value, ")")
+    else
+      paste0("PAD_Profiles_dsm_keepTrees/", pad_fn, " (d_opt=", dopt_value, ")")
   )
   required_files[[paste0(site, "_max")]] <- list(
     path     = file.path(base_ext, "max_res_10_m.tif"),
@@ -167,17 +196,40 @@ if (!dir.exists(out_dir)) {
 
 cli::cli_h2("Building multi-site sweep data.table")
 
+lai_als_dopt_paths <- setNames(
+  file.path(paths$output, "intermediate", "lai_als_dopt", sites,
+             "LAI_ALS_dopt_per_site.tif"),
+  sites
+)
+
 dt_sweep <- build_multisite_dt_sweep(
-  sites          = sites,
-  dopt_value     = dopt_value,
-  sweep_variants = sweep_variants,
-  sm6a_dir       = sm6a_dir,
-  ext_dir        = ext_dir
+  sites              = sites,
+  dopt_value         = dopt_value,
+  sweep_variants     = sweep_variants,
+  sm6a_dir           = sm6a_dir,
+  ext_dir            = ext_dir,
+  lai_als_dopt_paths = lai_als_dopt_paths
 )
 
 cli::cli_alert_info(
   "Total pixels loaded: {nrow(dt_sweep)} across {length(sites)} sites, ",
   "{ncol(dt_sweep)} columns"
+)
+
+# Keep a reference to the raw dt for threshold calibration (manuscript order).
+dt_sweep_raw <- dt_sweep
+
+# Site-level uniform-LAI sampling (matches 15_sm6_analysis.R workflow)
+cli::cli_h2("Site-level uniform-LAI sampling")
+dt_sweep <- sample_uniform_lai_dt(
+  dt                = dt_sweep,
+  n_target_per_site = n_target_per_site,
+  lai_min           = lai_min,
+  lai_max_quantile  = lai_max_quantile,
+  bin_width         = bin_width
+)
+cli::cli_alert_success(
+  "Sampled: {paste(table(dt_sweep$site), collapse=' / ')} pixels"
 )
 
 # ── Combinations (unchanged from SM6b passe 1) ────────────────────────────────
@@ -208,23 +260,41 @@ for (ms in metric_sources) {
       "[{thr_idx}/{n_variants}]  metric={ms}  window={method}_{size_m}_m"
     )
 
-    # ── Calibrate thresholds (tryCatch: only failed calibrations are skipped) ─
-    cli::cli_alert_info("Calibrating thresholds ...")
-    thr <- tryCatch(
-      calibrate_thresholds(
-        df                 = dt_sweep,
-        metric_col         = het_col,
-        sites              = sites,
-        target_n_per_class = 5000L
-      ),
-      error = function(e) {
-        cli::cli_alert_warning(
-          "Calibration failed for {ms}/{method}_{size_m}_m: ",
-          "{conditionMessage(e)}"
-        )
-        NULL
-      }
-    )
+    # ── Thresholds: fixed or dynamic balance on the RAW distribution ────────
+    if (!is.null(fixed_thresholds_sweep)) {
+      low_v  <- fixed_thresholds_sweep[["low"]]
+      high_v <- fixed_thresholds_sweep[["high"]]
+      vals   <- dt_sweep_raw[[het_col]]
+      counts <- vapply(sites, function(s) {
+        v <- vals[dt_sweep_raw$site == s]
+        c(Low    = sum(v <  low_v,                   na.rm = TRUE),
+          Medium = sum(v >= low_v  & v < high_v,     na.rm = TRUE),
+          High   = sum(v >= high_v,                  na.rm = TRUE))
+      }, numeric(3))
+      counts <- t(counts); rownames(counts) <- sites
+      thr <- list(low = low_v, high = high_v,
+                  balance_score = NA_real_, counts = counts)
+      cli::cli_alert_info(
+        "Fixed thresholds: low = {low_v}, high = {high_v}"
+      )
+    } else {
+      cli::cli_alert_info("Calibrating thresholds on raw distribution ...")
+      thr <- tryCatch(
+        calibrate_thresholds(
+          df                 = dt_sweep_raw,
+          metric_col         = het_col,
+          sites              = sites,
+          target_n_per_class = 5000L
+        ),
+        error = function(e) {
+          cli::cli_alert_warning(
+            "Calibration failed for {ms}/{method}_{size_m}_m: ",
+            "{conditionMessage(e)}"
+          )
+          NULL
+        }
+      )
+    }
 
     # ── Build threshold row ────────────────────────────────────────────────────
     if (is.null(thr)) {
@@ -291,10 +361,10 @@ for (ms in metric_sources) {
     # ── Compute metrics ────────────────────────────────────────────────────────
     cli::cli_alert_info("Computing metrics by class ...")
     metrics_var <- compute_metrics_by_class(
-      dt            = dt_var,
-      combinations  = combinations,
-      metric_source = ms,
-      downsample_n  = downsample_n
+      dt               = dt_var,
+      combinations     = combinations,
+      metric_source    = ms,
+      uniform_sample_n = NULL
     )
 
     # Add sweep identifier columns

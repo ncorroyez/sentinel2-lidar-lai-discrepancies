@@ -7,13 +7,17 @@
 #           12b  plot_prosail_pareto         — Pareto front visualisation
 #           22   plot_prosail_param_distrib  — LUT parameter distributions
 #           24   plot_s2_atbd_validation     — ATBD_T vs ATBD_F vs LAI_ALS
+#           08   scatter_lai_atbd            — 2×3 scatter + histogram comparison
+#                                              (moved from phase 2 because it
+#                                              consumes the ATBD_T raster
+#                                              produced by 25 in phase 3)
 #
-#         Outputs (revision/output/figures/sm5/):
+#         Outputs (output/figures/):
 #           fig_sm5_pareto_*.pdf, fig_sm5_param_distrib_*.pdf,
 #           fig_sm5_atbd_validation_*.pdf
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/03_prosail_figures.R")
+#   source("scripts/03_prosail_figures.R")
 # ---
 
 library(here)
@@ -32,9 +36,10 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/12b_sm5_plot_prosail_pareto.R")
-step("revision/scripts/steps/22_sm5_plot_prosail_param_distributions.R")
-step("revision/scripts/steps/24_plot_s2_atbd_validation.R")
+step("scripts/steps/12b_sm5_plot_prosail_pareto.R")
+step("scripts/steps/22_sm5_plot_prosail_param_distributions.R")
+step("scripts/steps/24_plot_s2_atbd_validation.R")
+step("scripts/steps/08_sm5_scatter_lai_atbd.R")   # ATBD_T raster from 25
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("03_prosail_figures done — {elapsed_total} min")

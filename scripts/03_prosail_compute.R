@@ -14,15 +14,15 @@
 #           25  train_apply_atbd_rasters — ATBD_T / ATBD_F full rasters
 #
 #         Outputs:
-#           revision/output/intermediate/PROSAIL_Models/{site}/
+#           output/intermediate/PROSAIL_Models/{site}/
 #             LIDFa_lai_LMA_BROWN/{scenario}/*.rds
-#           revision/output/intermediate/sm5/
+#           output/intermediate/sm5/
 #             all_results_combined_LIDFa_lai_LMA_BROWN.csv, prosail_opt.csv
-#           revision/output/intermediate/sm6/{site}/
+#           output/intermediate/sm6/{site}/
 #             s2lai_*_{scenario}_res_10_m.tif, s2lai_*_atbd_*_res_10_m.tif
 #
 # Run from project root (NC_Full/):
-#   source("revision/scripts/03_prosail_compute.R")
+#   source("scripts/03_prosail_compute.R")
 # ---
 
 library(here)
@@ -41,12 +41,12 @@ step <- function(rel_path) {
 
 t_start <- proc.time()
 
-step("revision/scripts/steps/09_train_prosail_full.R")
-step("revision/scripts/steps/10_apply_prosail_full.R")
-step("revision/scripts/steps/11_sm5_compute_metrics_full.R")
-step("revision/scripts/steps/12_sm5_select_prosail_opt.R")
-step("revision/scripts/steps/13_sm5_predict_lai_raster.R")
-step("revision/scripts/steps/25_train_apply_prosail_atbd_rasters.R")
+step("scripts/steps/09_train_prosail_full.R")
+step("scripts/steps/10_apply_prosail_full.R")
+step("scripts/steps/11_sm5_compute_metrics_full.R")
+step("scripts/steps/12_sm5_select_prosail_opt.R")
+step("scripts/steps/13_sm5_predict_lai_raster.R")
+step("scripts/steps/25_train_apply_prosail_atbd_rasters.R")
 
 elapsed_total <- round((proc.time() - t_start)[["elapsed"]] / 60, 1)
 cli::cli_h1("03_prosail_compute done — {elapsed_total} min")

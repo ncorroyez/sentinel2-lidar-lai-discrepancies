@@ -6,19 +6,19 @@
 #             - Theoretical: ATBD, OPT#1, OPT#2, OPT#3
 #             - Empirical (LiDAR): LAIALS and LAIALS_dopt per site + pooled
 #           Panel (b): ALA, BROWN, LMA configurations
-#             - ATBD (from prosail::get_atbd_v3_lut_input()) and OPT#1–4
+#             - ATBD (from prosail::get_atbd_lut_input()) and OPT#1–4
 #             - Sub-panels: ALA | BROWN | LMA
 #
 #         Reads:
-#           revision/output/intermediate/sm5/prosail_opt.csv
+#           output/intermediate/sm5/prosail_opt.csv
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/ladstack_classic.tif
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/max_res_10_m.tif
 #
 #         Outputs:
-#           revision/output/figures/reviewers/sm_prosail_param_distribs.pdf/.png
+#           output/figures/sm_prosail_param_distribs.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/22_sm5_plot_prosail_param_distributions.R")
+#   source("scripts/22_sm5_plot_prosail_param_distributions.R")
 # ---
 
 library(here)
@@ -30,14 +30,14 @@ library(truncnorm)
 library(prosail)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 set.seed(42)
 sites <- c("Aigoual", "Blois", "Mormal")
 
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── d_opt per site ─────────────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ cli::cli_alert_info(
 # ── ATBD parameter samples ─────────────────────────────────────────────────────
 
 cli::cli_alert_info("Sampling ATBD LUT parameters (n = 10 000)...")
-atbd_ip <- prosail::get_atbd_v3_lut_input(nb_samples = 10000L,
-                                            codistribution_lai = FALSE)
+atbd_ip <- prosail::get_atbd_lut_input(nb_samples = 10000L,
+                                         codistribution_lai = FALSE)
 # Column names: lai, lidf_a, lma, brown (all lower-case)
 cli::cli_alert_success("ATBD sample columns: {paste(names(atbd_ip), collapse=', ')}")
 
@@ -83,13 +83,30 @@ for (site in sites) {
   lad      <- terra::rast(lad_path)           # 38 layers (1 m depth each)
   nlyr_lad <- terra::nlyr(lad)
 
-  # Full-depth LAI (sum all layers)
+  # Full-depth LAI (sum all layers — absolute-height bins)
   lai_full <- terra::app(lad, fun = sum, na.rm = TRUE)
 
-  # d_opt-truncated LAI
-  d_val    <- dopt_by_site[[site]]
-  d_use    <- min(d_val, nlyr_lad)
-  lai_dopt <- terra::app(lad[[seq_len(d_use)]], fun = sum, na.rm = TRUE)
+  # d_opt-truncated LAI: prefer the script-07 raster (per-pixel canopy-top
+  # PAD), then raw PAD file. NEVER sum the bottom of `ladstack_classic.tif`:
+  # its layers are absolute-height bins (LAD_Layer_2.5..39.5), not
+  # depth-from-canopy-top.
+  d_val          <- dopt_by_site[[site]]
+  lai_dopt_07    <- file.path(paths$output, "intermediate", "lai_als_dopt",
+                              site, "LAI_ALS_dopt_per_site.tif")
+  pad_x          <- sprintf("PAD_%.1f_40.tif", 40 - d_val + 0.5)
+  pad_raw_path   <- file.path(base_ext, "PAD_Profiles_dsm_keepTrees", pad_x)
+
+  if (file.exists(lai_dopt_07)) {
+    lai_dopt <- terra::rast(lai_dopt_07)
+  } else if (file.exists(pad_raw_path)) {
+    lai_dopt <- terra::rast(pad_raw_path)
+  } else {
+    cli::cli_warn(
+      "LAI_ALS_dopt missing for {site} (d_opt = {d_val}). ",
+      "Run scripts/steps/07_compute_lai_als_dopt.R first. Skipping site."
+    )
+    next
+  }
 
   # Mask to pixels with max height > 10 m
   if (file.exists(max_path)) {
@@ -146,8 +163,7 @@ x_lai <- seq(0, 15, length.out = 5000L)
 lai_theory <- list(
   "ATBD"  = atbd_ip[["lai"]],
   "OPT#1" = c(min = 0, max =  9, mean = 4, sd = 3),
-  "OPT#2" = c(min = 0, max = 11, mean = 5, sd = 3),
-  "OPT#3" = c(min = 0, max = 13, mean = 6, sd = 3)
+  "OPT#2" = c(min = 0, max = 11, mean = 5, sd = 3)
 )
 
 site_labels <- sites
@@ -167,16 +183,15 @@ df_lai <- rbind(df_lai_theory, df_lai_empir)
 
 # Colour and linetype
 lai_levels <- c(
-  "ATBD", "OPT#1", "OPT#2", "OPT#3",
+  "ATBD", "OPT#1", "OPT#2",
   paste0("LAIALS - ",      sites),
   paste0("LAIALS_dopt - ", sites)
 )
 
 lai_colours <- c(
-  "ATBD"                         = "#1f78b4",
-  "OPT#1"                        = "#6a3d9a",
-  "OPT#2"                        = "#e31a1c",
-  "OPT#3"                        = "#ff7f00",
+  "ATBD"                  = "#1f78b4",
+  "OPT#1"                 = "#6a3d9a",
+  "OPT#2"                 = "#e31a1c",
   "LAIALS - Aigoual"      = "#33a02c",
   "LAIALS - Blois"        = "#B22222",
   "LAIALS - Mormal"       = "#ccaa00",
@@ -186,7 +201,7 @@ lai_colours <- c(
 )
 
 lai_linetypes <- c(
-  "ATBD"  = "solid", "OPT#1" = "solid", "OPT#2" = "solid", "OPT#3" = "solid",
+  "ATBD"  = "solid", "OPT#1" = "solid", "OPT#2" = "solid",
   "LAIALS - Aigoual"      = "solid",
   "LAIALS - Blois"        = "solid",
   "LAIALS - Mormal"       = "solid",
@@ -222,8 +237,8 @@ other_dists <- list(
   ALA = list(
     "ATBD"  = atbd_ip[["lidf_a"]],
     "OPT#1" = c(min = 20, max = 50, mean = 35, sd = 20),
-    "OPT#2" = c(min = 20, max = 60, mean = 40, sd = 20),
-    "OPT#3" = c(min = 30, max = 50, mean = 40, sd = 20),
+    "OPT#2" = c(min = 25, max = 55, mean = 40, sd = 20),
+    "OPT#3" = c(min = 30, max = 55, mean = 40, sd = 20),
     "OPT#4" = c(min = 30, max = 60, mean = 45, sd = 20)
   ),
   BROWN = list(

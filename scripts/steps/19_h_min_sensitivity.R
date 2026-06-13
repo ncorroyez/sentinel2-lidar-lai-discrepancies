@@ -21,7 +21,7 @@
 #         fCover sensitivity is handled in 11_fcover_sensitivity.R).
 #
 #         Output:
-#           revision/output/intermediate/reviewers/h_min_sensitivity_atbd.csv
+#           output/intermediate/reviewers/h_min_sensitivity_atbd.csv
 #           9 rows (3 sites × 3 h_min values), 16 columns:
 #             site, h_min_value, n_pixels,
 #             lai_als_{mean,median,p95,max},
@@ -33,7 +33,7 @@
 #           03_RESULTS/{site}/Metrics/Deciduous_Only/s2lai_summer_atbd_res_10_m.tif
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/12_h_min_sensitivity.R")
+#   source("scripts/12_h_min_sensitivity.R")
 # ---
 
 library(here)
@@ -41,13 +41,18 @@ library(terra)
 library(data.table)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
-source(here::here("revision", "R", "h_min_sensitivity.R"))
+source(here::here("R", "paths.R"))
+source(here::here("R", "h_min_sensitivity.R"))
+source(here::here("R", "k_sensitivity.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites        <- c("Aigoual", "Blois", "Mormal")
 h_min_values <- c(2, 3, 4, 5)    # vegetation height thresholds to test (metres)
+
+# k rescaling — PADs were precomputed with k_ref; analysis uses k_select.
+k_ref        <- 0.5
+k_select     <- 0.65
 
 ext_dir <- paths$ext_results
 out_dir <- file.path(paths$output, "intermediate", "reviewers")
@@ -173,6 +178,8 @@ for (site in sites) {
       ladstack_path = ladstack_path(site),
       h_min         = h_min
     )
+    lai_als_rast <- rescale_lai_for_k(lai_als_rast, k_ref = k_ref,
+                                       k_new = k_select)
 
     all_rows[[row_idx]] <- compute_h_min_sensitivity_metrics(
       lai_als_rast      = lai_als_rast,

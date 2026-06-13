@@ -48,7 +48,7 @@
 #'   Supported: \code{"LIDFa"}, \code{"lai"}, \code{"LMA"}, \code{"BROWN"}.
 #'   Default strategy: \code{c("LIDFa","lai","LMA","BROWN")}.
 #' @param output_dir   Character. Root output directory (e.g.
-#'   \code{revision/output/intermediate/PROSAIL_Models/<site>}). Sub-directory
+#'   \code{output/intermediate/PROSAIL_Models/<site>}). Sub-directory
 #'   \code{Simulations_Strategy/<name_strategy>/} is created inside.
 #' @param name_strategy Character. Label for this parameter strategy (e.g.
 #'   \code{"LIDFa_lai_LMA_BROWN"}). Used as sub-directory name and in output
@@ -69,7 +69,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' out_dir <- here::here("revision", "output", "intermediate",
+#' out_dir <- here::here("output", "intermediate",
 #'                       "PROSAIL_Models", "Blois")
 #' simulations <- get_parameter_combinations(
 #'   parms2test   = c("LIDFa", "lai", "LMA", "BROWN"),
@@ -138,19 +138,18 @@ get_parameter_combinations <- function(parms2test,
   get_combination <- function(parm) {
     combo <- list()
     combo$LIDFa <- list(
-      "ATBD",
-      c(min = 20, max = 50, distribution = "gauss", mean = 35, sd = 20),
-      c(min = 20, max = 60, distribution = "gauss", mean = 40, sd = 20),
-      c(min = 30, max = 50, distribution = "gauss", mean = 40, sd = 20),
-      c(min = 30, max = 60, distribution = "gauss", mean = 45, sd = 20)
+      "ATBD",                                                                            # lvl 1 = ATBD
+      c(min = 20, max = 50, distribution = "gauss", mean = 35, sd = 20),                 # lvl 2 = OPT#1
+      c(min = 25, max = 55, distribution = "gauss", mean = 40, sd = 20),                 # lvl 3 = OPT#2
+      c(min = 30, max = 55, distribution = "gauss", mean = 40, sd = 20),                 # lvl 4 = OPT#3
+      c(min = 30, max = 60, distribution = "gauss", mean = 45, sd = 20)                  # lvl 5 = OPT#4
     )
     combo$lai <- list(
-      "ATBD",
-      c(min = 0,  max = 9,  distribution = "gauss", mean = 4, sd = 3),
-      c(min = 0,  max = 11, distribution = "gauss", mean = 5, sd = 3),
-      c(min = 0,  max = 13, distribution = "gauss", mean = 6, sd = 3),
-      c(distribution = "LiDAR_LAI"),
-      c(distribution = "LiDAR_LAI_Best_Site_Depth")
+      "ATBD",                                                                            # lvl 1 = ATBD
+      c(min = 0, max = 9,  distribution = "gauss", mean = 4, sd = 3),                    # lvl 2 = OPT#1
+      c(min = 0, max = 11, distribution = "gauss", mean = 5, sd = 3),                    # lvl 3 = OPT#2
+      c(distribution = "LiDAR_LAI"),                                                     # lvl 4 = LAIALS
+      c(distribution = "LiDAR_LAI_Best_Site_Depth")                                      # lvl 5 = LAIALS_dopt
     )
     combo$LMA <- list(
       "ATBD",
@@ -207,8 +206,8 @@ get_parameter_combinations <- function(parms2test,
 #' (3) \code{apply_noise_atbd()}.
 #'
 #' Updated for prosail 3.0.0 (2026-04): uses \code{generate_lut_4sail()} with
-#' \code{spec_soil_ossl} (48-spectrum OSSL soil database, replaces 3-spectrum
-#' \code{SpecSOIL}) and \code{spec_atm} (snake_case column names, replaces
+#' \code{spec_soil_atbd_v2} (ATBD v2 soil spectrum) and \code{spec_atm}
+#' (snake_case column names, replaces
 #' \code{SpecATM}). The \code{surface_refl} component of the returned list
 #' is the full coupled BRF that \code{apply_sensor_characteristics()} expects.
 #' Passing \code{SpecATM} (camelCase columns) instead of \code{spec_atm} silently
@@ -218,7 +217,7 @@ get_parameter_combinations <- function(parms2test,
 #' \code{train_one_simulation()}.
 #'
 #' @param input_prosail A \code{data.frame} of PROSAIL input parameters as
-#'   returned by \code{prosail::get_atbd_v3_lut_input()}, one row per LUT sample.
+#'   returned by \code{prosail::get_atbd_lut_input()}, one row per LUT sample.
 #' @param srf           A sensor spectral response function object as returned
 #'   by \code{prosail::get_srf_sensor("Sentinel_2")}.
 #' @param bands_to_select Integer vector. Row indices (into the BRF matrix)
@@ -233,7 +232,7 @@ get_parameter_combinations <- function(parms2test,
 #' \dontrun{
 #' srf  <- prosail::get_srf_sensor("Sentinel_2")
 #' bsel <- match(c("B3","B4","B8"), srf$Spectral_Bands)
-#' ip   <- prosail::get_atbd_v3_lut_input(nb_samples = 500)
+#' ip   <- prosail::get_atbd_lut_input(nb_samples = 500)
 #' lut  <- build_prosail_lut(ip, srf, bsel)
 #' dim(lut)  # 3 x 500
 #' }
@@ -243,7 +242,7 @@ build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
   res <- prosail::generate_lut_4sail(
     input_prosail = input_prosail,
     spec_prospect = prospect::spec_prospect_full_range,
-    spec_soil     = prosail::spec_soil_ossl,
+    spec_soil     = prosail::spec_soil_atbd_v2,
     spec_atm      = prosail::spec_atm
   )
   brf_lut_1nm <- res$surface_refl
@@ -297,7 +296,7 @@ build_prosail_lut <- function(input_prosail, srf, bands_to_select) {
 #' \dontrun{
 #' srf   <- prosail::get_srf_sensor("Sentinel_2")
 #' bsel  <- match(c("B3","B4","B8"), srf$Spectral_Bands)
-#' ip    <- prosail::get_atbd_v3_lut_input(nb_samples = 1000)
+#' ip    <- prosail::get_atbd_lut_input(nb_samples = 1000)
 #' lut   <- build_prosail_lut(ip, srf, bsel)
 #' svr   <- train_svr_ensemble(lut, ip$lai, n_samples = 1000)
 #' length(svr)  # 10
@@ -329,7 +328,7 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #' corresponding element of \code{filename}.
 #'
 #' @details
-#' **ATBD v3 baseline**: \code{prosail::get_atbd_v3_lut_input()} (prosail 3.0.0,
+#' **ATBD v2 baseline**: \code{prosail::get_atbd_lut_input()} (prosail 3.0.0,
 #' replaces \code{get_InputPROSAIL(atbd=TRUE)}) is called once per
 #' \code{train_one_simulation()} call. In sequential mode each chunk is a single
 #' row of the grid, so the baseline is always fresh. In parallel mode a chunk may
@@ -338,7 +337,7 @@ train_svr_ensemble <- function(brf_lut_noise, input_lai, n_samples) {
 #'
 #' **Parameter name mapping**: \code{simulations$grid_simu} column names follow
 #' legacy camelCase (\code{"LIDFa"}, \code{"LMA"}, \code{"BROWN"}) while the
-#' \code{get_atbd_v3_lut_input()} output uses snake_case (\code{"lidf_a"},
+#' \code{get_atbd_lut_input()} output uses snake_case (\code{"lidf_a"},
 #' \code{"lma"}, \code{"brown"}). An internal \code{parm_col_map} vector
 #' translates grid names to data.frame column names before overriding.
 #'
@@ -383,7 +382,7 @@ train_one_simulation <- function(simuset, filename, combinations,
                                   nbSamples    = 5000,
                                   p            = NULL,
                                   S2BandSelect = c("B3", "B4", "B8")) {
-  # Reshape geometry of acquisition into geom_acq list expected by get_atbd_v3_lut_input
+  # Reshape geometry of acquisition into geom_acq list expected by get_atbd_lut_input
   geom_acq <- list(
     min = data.frame(
       tto = geom_s2$MinAngle["vza"],
@@ -397,10 +396,10 @@ train_one_simulation <- function(simuset, filename, combinations,
     )
   )
 
-  # ATBD v3 baseline distribution — shared starting point for all rows in simuset.
-  # Uses get_atbd_v3_lut_input() (prosail 3.0.0) in place of get_InputPROSAIL(atbd=TRUE).
-  # The v3 baseline uses updated parameter priors and spec_soil_ossl (48 OSSL spectra).
-  input_prosail <- prosail::get_atbd_v3_lut_input(
+  # ATBD v2 baseline distribution — shared starting point for all rows in simuset.
+  # Uses get_atbd_lut_input() (prosail 3.0.0) in place of get_InputPROSAIL(atbd=TRUE).
+  # The v2 baseline uses the original ATBD parameter priors and spec_soil_atbd_v2.
+  input_prosail <- prosail::get_atbd_lut_input(
     nb_samples         = nbSamples,
     geom_acq           = geom_acq,
     codistribution_lai = FALSE
@@ -411,7 +410,7 @@ train_one_simulation <- function(simuset, filename, combinations,
   bands_to_select <- match(S2BandSelect, srf$Spectral_Bands)
 
   # Map from grid parameter names (legacy camelCase from get_combination) to the
-  # snake_case column names used by get_atbd_v3_lut_input() output data.frame.
+  # snake_case column names used by get_atbd_lut_input() output data.frame.
   parm_col_map <- c(LIDFa = "lidf_a", lai = "lai", LMA = "lma", BROWN = "brown")
 
   # One SVR model per row of simuset
@@ -510,7 +509,7 @@ train_one_simulation <- function(simuset, filename, combinations,
 #' \dontrun{
 #' simulations <- get_parameter_combinations(
 #'   parms2test    = c("LIDFa","lai","LMA","BROWN"),
-#'   output_dir    = here::here("revision","output","intermediate","PROSAIL_Models","Blois"),
+#'   output_dir    = file.path(paths$output, "intermediate", "PROSAIL_Models","Blois"),
 #'   name_strategy = "LIDFa_lai_LMA_BROWN"
 #' )
 #' train_all_simulations(

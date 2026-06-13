@@ -11,15 +11,15 @@
 #         filled symbol on each line.
 #
 #         Reads:
-#           revision/output/intermediate/reviewers/
+#           output/intermediate/reviewers/
 #             joint_fcover_hmin_sensitivity_atbd.csv
 #
 #         Output:
-#           revision/output/figures/sm_fcover_hmin_joint.pdf
-#           revision/output/figures/sm_fcover_hmin_joint.png
+#           output/figures/sm_fcover_hmin_joint.pdf
+#           output/figures/sm_fcover_hmin_joint.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/20c_fcover_hmin_joint_plot.R")
+#   source("scripts/20c_fcover_hmin_joint_plot.R")
 # ---
 
 library(here)
@@ -30,7 +30,7 @@ library(patchwork)
 # ── I/O ────────────────────────────────────────────────────────────────────────
 
 in_csv  <- here::here(
-  "revision", "output", "intermediate", "reviewers",
+  "output", "intermediate", "reviewers",
   "joint_fcover_hmin_sensitivity_atbd.csv"
 )
 out_dir <- file.path(paths$output, "figures")

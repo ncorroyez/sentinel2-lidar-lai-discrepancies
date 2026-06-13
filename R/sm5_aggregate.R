@@ -10,7 +10,7 @@
 #           - R2 column added (not in legacy).
 #           - name_strategy cleaned ("LIDFa_lai_LMA_BROWN", no _Agg_10m suffix).
 #           - Four norm_methods active instead of only DSM_keepTrees.
-#           - S2 LAI CSV read from SM4 output (revision/output/intermediate/...)
+#           - S2 LAI CSV read from SM4 output (output/intermediate/...)
 #             not from 03_RESULTS/...PROSAIL_Models/ (legacy path).
 #           - Single fwrite() at script level; no double-write with append.
 #           - List accumulation instead of repeated rbindlist() for performance.
@@ -48,7 +48,7 @@ detect_atbd <- function(colname, n_params) {
 #' Columns: \code{lidar_values} (numeric PAD sum), \code{samples_id} (integer).
 #'
 #' \strong{S2 LAI estimated CSV} (SM4 output):
-#' \code{revision/output/intermediate/PROSAIL_Models/{site}/{strategy}/
+#' \code{output/intermediate/PROSAIL_Models/{site}/{strategy}/
 #' LAI_estimated_{method}_nbSamples_{n}.csv}
 #' Columns: one per PROSAIL combination, named \code{LIDFa=X_lai=Y_LMA=Z_BROWN=W}.
 #'
@@ -73,14 +73,13 @@ read_sampling_and_estimated <- function(site, norm, depth,
                                          nb_samples, h_min = 10L,
                                          lai_scenario = "per_site") {
   lidar_csv <- file.path(
-    paths$ext_results, site, "PROSAIL_Optimization", "sampling",
+    paths$sampling, site,
     paste0("PAD_", norm, "_Depth_", depth,
            "_Samples_", sampling_method,
            "_hmin", h_min,
            "_nbSamples_", nb_samples, ".csv")
   )
-  s2_csv <- here::here(
-    "revision", "output", "intermediate", "PROSAIL_Models",
+  s2_csv <- file.path(paths$output, "intermediate", "PROSAIL_Models",
     site, name_strategy, lai_scenario,
     paste0("LAI_estimated_", lai_scenario, "_", sampling_method,
            "_hmin", h_min,

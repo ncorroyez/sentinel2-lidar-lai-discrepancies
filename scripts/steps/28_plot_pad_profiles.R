@@ -14,10 +14,10 @@
 #             ladstack_classic.tif   (38 layers: LAD_Layer_2.5 … LAD_Layer_39.5)
 #
 #         Outputs:
-#           revision/output/figures/reviewers/pad_profiles_boxplot.pdf/.png
+#           output/figures/pad_profiles_boxplot.pdf/.png
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/28_plot_pad_profiles.R")
+#   source("scripts/28_plot_pad_profiles.R")
 # ---
 
 library(here)
@@ -26,43 +26,80 @@ library(ggplot2)
 library(terra)
 library(cli)
 
-source(here::here("revision", "R", "paths.R"))
+source(here::here("R", "paths.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
 sites      <- c("Aigoual", "Blois", "Mormal")
 max_height <- 40L
 
-ladstack_subpath <- file.path("Metrics", "Deciduous_Only", "ladstack_classic.tif")
+# k rescaling — the ladstack rasters were computed with k_ref = 0.5
+# (Bouvier default at PAD precomputation); this study uses k_select = 0.65.
+# Beer–Lambert is multiplicative, so LAI rescales by k_ref / k_select.
+k_ref      <- 0.5
+k_select   <- 0.65
+k_scale    <- k_ref / k_select   # ≈ 0.7692
 
-out_dir <- file.path(paths$output, "figures", "reviewers")
+# Two normalisation procedures, each with its own ladstack:
+#   CHM (canopy-height-model based) → ladstack_dsm.tif
+#   DTM (digital-terrain-model based) → ladstack_dtm.tif
+norm_files <- list(
+  CHM = "ladstack_dsm.tif",
+  DTM = "ladstack_dtm.tif"
+)
+
+out_dir <- file.path(paths$output, "figures")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 # ── Load rasters ───────────────────────────────────────────────────────────────
+# For each (site, norm), we read the per-bin LAD raster (38 layers, 1 m bins
+# named LAD_Layer_2.5 … LAD_Layer_39.5), reorder layers from canopy top to
+# bottom, and compute the cumulative sum so that the column "PAD_value" at
+# depth d is the LAI integrated from the canopy top down to depth d.
 
-cli::cli_h1("Loading PAD rasters...")
+cli::cli_h1("Loading PAD rasters (CHM + DTM, cumulative from top)...")
 
-load_site_ladstack <- function(site) {
-  lad_path <- file.path(paths$ext_results, site, ladstack_subpath)
-  if (!file.exists(lad_path)) stop("Missing file:\n  ", lad_path)
+load_site_ladstack <- function(site, norm_label, fn) {
+  lad_path <- file.path(paths$ext_results, site, "Metrics",
+                        "Deciduous_Only", fn)
+  if (!file.exists(lad_path)) {
+    cli::cli_warn("Missing raster for {site} / {norm_label}: {lad_path}")
+    return(NULL)
+  }
 
   lad     <- terra::rast(lad_path)
   heights <- as.numeric(sub("LAD_Layer_", "", names(lad)))
   depths  <- max_height - heights + 0.5   # depth from canopy top (m)
 
-  mat <- terra::values(lad, mat = TRUE)
-  dt_list <- lapply(seq_along(heights), function(i) {
-    vals <- mat[, i]
-    vals <- vals[!is.na(vals) & vals >= 0]
-    data.table(PAD_value = vals, Depth = depths[[i]], Norm = "DSM", Site = site)
+  # Reorder layers so depth grows top → bottom (depth = 1 at top, 38 at bottom)
+  ord <- order(depths)
+  mat <- terra::values(lad, mat = TRUE)[, ord, drop = FALSE]
+  depths_ord <- depths[ord]
+
+  # Cumulative LAI from canopy top down to each depth bin, rescaled to
+  # k_select (Beer–Lambert is multiplicative).
+  mat[is.na(mat)] <- 0
+  mat <- mat * k_scale
+  cum_mat <- t(apply(mat, 1L, cumsum))
+  # cum_mat[i, j] = LAI integrated from top down to depths_ord[j]
+
+  dt_list <- lapply(seq_along(depths_ord), function(j) {
+    vals <- cum_mat[, j]
+    vals <- vals[!is.na(vals) & vals > 0]
+    data.table(PAD_value = vals, Depth = depths_ord[[j]],
+               Norm = norm_label, Site = site)
   })
   data.table::rbindlist(dt_list)
 }
 
-dt_list <- lapply(sites, function(site) {
-  cli::cli_progress_step("Loading {site}")
-  load_site_ladstack(site)
-})
+dt_list <- list()
+for (site in sites) {
+  for (norm_label in names(norm_files)) {
+    cli::cli_progress_step("Loading {site} / {norm_label}")
+    dt_one <- load_site_ladstack(site, norm_label, norm_files[[norm_label]])
+    if (!is.null(dt_one)) dt_list[[length(dt_list) + 1L]] <- dt_one
+  }
+}
 
 dt <- data.table::rbindlist(dt_list)
 cli::cli_progress_done()
@@ -96,8 +133,8 @@ rm(dt); gc()
 
 # ── Plot ───────────────────────────────────────────────────────────────────────
 
-norm_colors <- c(DSM = "#F8766D")
-norm_labels <- c(DSM = expression(DSM[ALS]))
+norm_colors <- c(CHM = "#F8766D", DTM = "#00BFC4")
+norm_labels <- c(CHM = expression(CHM[ALS]), DTM = expression(DTM[ALS]))
 
 pd <- ggplot2::position_dodge(width = 0.75)
 
@@ -120,7 +157,7 @@ p <- ggplot2::ggplot(stats_dt, ggplot2::aes(y = Depth_f, fill = Norm, colour = N
   ) +
   ggplot2::facet_wrap(~ Site, scales = "fixed", nrow = 1) +
   ggplot2::scale_y_discrete(drop = FALSE) +
-  ggplot2::scale_x_continuous(limits = c(0, 15)) +
+  ggplot2::scale_x_continuous(limits = c(0, 12)) +
   ggplot2::scale_fill_manual(values = norm_colors, labels = norm_labels,
                               name = "Normalization") +
   ggplot2::scale_colour_manual(values = norm_colors, labels = norm_labels,

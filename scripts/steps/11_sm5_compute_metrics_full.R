@@ -2,34 +2,34 @@
 # title:  10_sm5_compute_metrics_full.R
 # desc:   Orchestration — computes the full metrics table for all 270 PROSAIL
 #         configurations × depths × h_min × LAI scenarios, and writes a single
-#         combined CSV to revision/output/intermediate/sm5/.
+#         combined CSV to output/intermediate/sm5/.
 #
-#         Calls build_metrics_table() from revision/R/sm5_aggregate.R for each
+#         Calls build_metrics_table() from R/sm5_aggregate.R for each
 #         (h_min × lai_scenario) combination and stacks the results.
 #
 # Prerequisites:
 #   03b — PAD CSVs at 03_RESULTS/{site}/PROSAIL_Optimization/sampling/
 #   09  — LAI estimated CSVs at
-#         revision/output/intermediate/PROSAIL_Models/{site}/
+#         output/intermediate/PROSAIL_Models/{site}/
 #         LIDFa_lai_LMA_BROWN/{scenario}/
 #         LAI_estimated_{scenario}_stratified_uniform_hmin{h_min}_nbSamples_5000.csv
 #
 # Output:
-#   revision/output/intermediate/sm5/
+#   output/intermediate/sm5/
 #   all_results_combined_LIDFa_lai_LMA_BROWN.csv
 #   (columns: Site, Norm, Depth, Method, h_min, lai_scenario, Column,
 #             R, R2, RMSE, Bias, Slope, ATBD)
 #
 # Run from the project root (NC_Full/):
-#   source("revision/scripts/10_sm5_compute_metrics_full.R")
+#   source("scripts/10_sm5_compute_metrics_full.R")
 # ---
 
 library("here")
 library("data.table")
 library("cli")
 
-source(here::here("revision", "R", "sm5_metrics.R"))
-source(here::here("revision", "R", "sm5_aggregate.R"))
+source(here::here("R", "sm5_metrics.R"))
+source(here::here("R", "sm5_aggregate.R"))
 
 # ── Parameters ─────────────────────────────────────────────────────────────────
 
@@ -43,11 +43,15 @@ nb_samples       <- 5000L
 h_min_values     <- c(10L, 15L, 20L)
 lai_scenarios    <- c("common")
 
+# TRUE  — ignore any existing CSV and recompute all chunks from scratch
+# FALSE — load existing CSV and skip already-done (scenario × h_min) chunks (resume mode)
+overwrite <- TRUE
+
 # k / scan-angle rescaling — must match 07 and 09.
 # scale_factor = (k_ref / k_select) × cos(theta_select)
 # applied to PAD CSV values (which were computed at k_ref = 0.5, theta = 0°).
 k_ref        <- 0.5
-k_select     <- 0.6
+k_select     <- 0.65
 theta_select <- 0    # degrees from nadir (scan angle correction handled separately)
 scale_factor <- (k_ref / k_select) * cos(theta_select * pi / 180)
 
@@ -63,7 +67,7 @@ out_csv <- file.path(out_dir,
 # ── Build table ────────────────────────────────────────────────────────────────
 
 # Load existing CSV if present; identify already-done (scenario × h_min) chunks
-if (file.exists(out_csv)) {
+if (!overwrite && file.exists(out_csv)) {
   existing_dt <- data.table::fread(out_csv)
   done_keys   <- unique(existing_dt[, paste(lai_scenario, h_min)])
   cli::cli_alert_info(
