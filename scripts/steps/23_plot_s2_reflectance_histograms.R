@@ -83,11 +83,12 @@ for (site in sites) {
   fcov_max <- terra::global(fcov_r, "max", na.rm = TRUE)[[1L]]
   thr <- if (fcov_max > 1.5) fcover_thr * 100 else fcover_thr
 
-  # Build valid-pixel mask
+  # Build valid-pixel mask. NA in max_r or fCover propagates to the mask;
+  # treat those as invalid so they are masked out instead of leaking through.
   mask_valid <- (max_r > h_min) & (fcov_r > thr)
 
-  # Apply mask to reflectance stack
-  refl_masked <- terra::mask(refl, mask_valid, maskvalues = 0)
+  # Apply mask to reflectance stack: drop both 0 (FALSE) and NA pixels
+  refl_masked <- terra::mask(refl, mask_valid, maskvalues = c(0, NA))
 
   # Extract values
   vals <- as.data.table(terra::values(refl_masked, na.rm = FALSE))
