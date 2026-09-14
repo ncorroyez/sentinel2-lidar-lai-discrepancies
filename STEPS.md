@@ -1,12 +1,12 @@
 # Pipeline steps — inputs, outputs, and produced figures
 
-This document maps each step script under `scripts/steps/` to its inputs,
+This document maps each step script under `scripts/ch2/steps/` to its inputs,
 outputs, and (if applicable) the manuscript figure(s) it produces. Steps
 are listed in the order they run inside the phase orchestrators
 (`scripts/0X_*.R`). All paths are relative to the project root.
 
 A step is normally invoked by its phase orchestrator. Each step also runs
-standalone via `source("scripts/steps/<step>.R")` once its upstream
+standalone via `source("scripts/ch2/steps/<step>.R")` once its upstream
 outputs exist.
 
 Legend:
@@ -16,7 +16,7 @@ Legend:
 
 ---
 
-## Phase 1 — Preparation (`scripts/01_prepare.R`)
+## Phase 1 — Preparation (`scripts/ch2/01_prepare.R`)
 
 ### `02a_train_prosail_atbd.R`
 PROSAIL ATBD-v3 SVR training (per site, codist = TRUE / FALSE).
@@ -45,7 +45,7 @@ Apply trained ATBD SVR to the sampled pixels.
 
 ---
 
-## Phase 2 — d<sub>opt</sub> selection (`scripts/02_dopt_compute.R` / `02_dopt_figures.R`)
+## Phase 2 — d<sub>opt</sub> selection (`scripts/ch2/02_dopt_compute.R` / `02_dopt_figures.R`)
 
 ### `05a_sm5_compute_metrics_atbd.R`
 R, R², RMSE, Bias, Slope between LAI<sub>S2-ATBD</sub> and LAI<sub>ALS</sub>
@@ -95,7 +95,7 @@ Scatter plots LAI<sub>ALS,dopt</sub> vs LAI<sub>S2-ATBD</sub>.
 
 ---
 
-## Phase 3 — PROSAIL full inversion (`scripts/03_prosail_*.R`)
+## Phase 3 — PROSAIL full inversion (`scripts/ch2/03_prosail_*.R`)
 
 ### `09_train_prosail_full.R`
 270 PROSAIL configurations × LAI scenarios, SVR ensemble per (site, h_min).
@@ -142,7 +142,7 @@ ATBD<sub>T</sub> / ATBD<sub>F</sub> validation against SNAP biophysical.
 
 ---
 
-## Phase 4 — Heterogeneity (`scripts/04_het_*.R`)
+## Phase 4 — Heterogeneity (`scripts/ch2/04_het_*.R`)
 
 ### `14_sm6_compute_heterogeneity.R`
 DSM-std and CHM-std heterogeneity metrics at 10 m.
@@ -202,7 +202,7 @@ Vertical PAD profile figures (per site, per normalisation).
 
 ---
 
-## Phase 5 — Sensitivity analyses (`scripts/05_sensitivity*.R`)
+## Phase 5 — Sensitivity analyses (`scripts/ch2/05_sensitivity*.R`)
 
 Reviewer-driven additional analyses. All operate post-hoc on precomputed
 PAD stacks and Raw ladstacks; no need to rerun the LiDAR pipeline.

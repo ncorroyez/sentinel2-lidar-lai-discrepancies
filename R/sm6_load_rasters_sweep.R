@@ -147,7 +147,7 @@ load_site_rasters_sweep <- function(site, dopt_value, sweep_variants,
     stop("load_site_rasters_sweep: LAI_ALS_dopt not found for site '", site,
          "' (d_opt = ", dopt_value, "). Tried:\n  ",
          lai_als_dopt_path, "\n  ", pad_path,
-         "\nRun scripts/steps/07_compute_lai_als_dopt.R first.")
+         "\nRun scripts/ch2/steps/07_compute_lai_als_dopt.R first.")
   }
 
   rasters <- list(

@@ -1,8 +1,8 @@
 # ---
 # title:  sm6_plot_heterogeneity.R
 # desc:   Shared constants and the plot_het_grid() function used by both
-#         scripts/steps/20_sm6_plot_heterogeneity.R (SM6a pixels) and
-#         scripts/steps/20e_plot_sm5_heter_classes.R (SM5 sample).
+#         scripts/ch2/steps/20_sm6_plot_heterogeneity.R (SM6a pixels) and
+#         scripts/ch2/steps/20e_plot_sm5_heter_classes.R (SM5 sample).
 # ---
 
 # ── Factor levels ──────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ het_ref_lines <- data.table::data.table(
 #' @title Load a heterogeneity CSV and pivot to long format for plotting
 #'
 #' @param csv_path Character. Path to a CSV with the schema produced by
-#'   scripts/steps/15_sm6_analysis.R or 20e_sm5_heter_classes.R.
+#'   scripts/ch2/steps/15_sm6_analysis.R or 20e_sm5_heter_classes.R.
 #' @return A long-format \code{data.table} with the factor levels above.
 #' @export
 load_heter_csv_long <- function(csv_path) {

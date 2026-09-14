@@ -166,7 +166,7 @@ load_site_rasters <- function(site, dopt_value, sm6a_dir, ext_dir,
       stop("load_site_rasters: LAI_ALS_dopt not found for site '", site,
            "' (d_opt = ", dopt_value, ").\n  Tried:\n    ",
            lai_als_dopt_path, "\n    ", pad_path,
-           "\n  Run scripts/steps/07_compute_lai_als_dopt.R first.")
+           "\n  Run scripts/ch2/steps/07_compute_lai_als_dopt.R first.")
     lai_als_dopt <- terra::rast(pad_path)
   }
 

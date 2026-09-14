@@ -3,7 +3,7 @@
 # desc:   Loads the per-site SM5 stratified-uniform sample (5,000 points per
 #         site, h_min=10, LAI-uniform, fCover > 0.9) joined with DSM_sd at
 #         each sample position and the four LAI estimators used by the
-#         heterogeneity analysis. Used by scripts/steps/20d_* (continuous)
+#         heterogeneity analysis. Used by scripts/ch2/steps/20d_* (continuous)
 #         and 20e_* (classes on SM5 points).
 # ---
 

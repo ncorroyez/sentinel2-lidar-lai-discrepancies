@@ -190,3 +190,25 @@ logs/
 # Reviewer materials — kept local only, not versioned
 reviewers/*.docx
 reviewers/*.pdf
+
+# --- harmonisation 2026-09-14: keep thesis material out of the public remote ---
+# origin is the PUBLIC pipeline repo; thesis chapters, plans, bibliographies,
+# slides, session files and reorg archives must never be pushed there.
+manuscripts/
+plans/
+_archive_harmonisation_2026-09-14/
+_archive_redaction_2026-09-14/
+paper1_sub_August26/
+thesis*.md
+thesis*.pdf
+*.bib
+*.csl
+*.pptx
+*.RData
+outputs/
+figures/
+media/
+.claude/
+Rplots.pdf
+.~lock.*#
+*.docx
